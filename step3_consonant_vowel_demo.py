@@ -207,6 +207,16 @@ def main():
         st.session_state["selected_consonant"] = "k"
     if "audio_token" not in st.session_state:
         st.session_state["audio_token"] = 0
+    if "vowel_level" not in st.session_state:
+        st.session_state["vowel_level"] = 2  # デフォルトは Lv 2 (控えめ 35%: 自然な子音バランス)
+
+    VOWEL_LEVELS = {
+        1: {"gain": 0.18, "label": "Lv 1 (18%)", "desc": "超極小 (子音アタック最優先)"},
+        2: {"gain": 0.35, "label": "Lv 2 (35%) ⭐推奨", "desc": "控えめ (子音クリア・最適バランス)"},
+        3: {"gain": 0.55, "label": "Lv 3 (55%)", "desc": "標準 (バランス型)"},
+        4: {"gain": 0.75, "label": "Lv 4 (75%)", "desc": "明瞭母音 (母音強め)"},
+        5: {"gain": 1.00, "label": "Lv 5 (100%)", "desc": "フル母音 (最大)"},
+    }
 
     syn = ConsonantVowelSynthesizer()
 
@@ -260,6 +270,31 @@ def main():
     sel_v = st.session_state["selected_vowel"]
     st.caption(f"現在選択中の母音: **{JAPANESE_VOWELS[sel_v]['name']}** （F1={JAPANESE_VOWELS[sel_v]['f1']:.0f}Hz, F2={JAPANESE_VOWELS[sel_v]['f2']:.0f}Hz, F3={JAPANESE_VOWELS[sel_v]['f3']:.0f}Hz）")
 
+    # -------------------------------------------------------------------------
+    # 【操作部 1.5】母音音量バランス (5段階ボタングループ)
+    # -------------------------------------------------------------------------
+    st.markdown("#### 🔊 母音音量バランス (5段階選択)")
+    st.caption("母音の持続音と子音アタックの比率を調整します。母音が強すぎると感じる場合は Lv 1 や Lv 2（推奨）をお選びください。")
+    vol_cols = st.columns(5)
+    for lvl_idx in range(1, 6):
+        lvl_info = VOWEL_LEVELS[lvl_idx]
+        is_cur_lvl = (st.session_state["vowel_level"] == lvl_idx)
+        b_type = "primary" if is_cur_lvl else "secondary"
+        with vol_cols[lvl_idx - 1]:
+            if st.button(lvl_info["label"], key=f"btn_vlevel_{lvl_idx}", type=b_type, use_container_width=True):
+                st.session_state["vowel_level"] = lvl_idx
+                st.session_state["audio_token"] += 1
+                st.rerun()
+
+    cur_lvl = st.session_state["vowel_level"]
+    cur_v_gain = VOWEL_LEVELS[cur_lvl]["gain"]
+    st.markdown(
+        f"<div style='font-size: 0.85rem; color: #a0aec0; margin-top: -4px; margin-bottom: 12px;'>"
+        f"現在の設定: <b style='color: #00ffff;'>{VOWEL_LEVELS[cur_lvl]['label']}</b> ── {VOWEL_LEVELS[cur_lvl]['desc']}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
     st.markdown("---")
 
     # -------------------------------------------------------------------------
@@ -304,6 +339,7 @@ def main():
         total_duration_sec=0.38,
         osc_type=osc_type,
         q_scale=q_scale,
+        vowel_volume=cur_v_gain,
     )
 
     s_bytes = audio_to_bytes(syllable_audio, sr=syn.sr)
@@ -315,12 +351,13 @@ def main():
 
     st.markdown(
         f"""
-        <div style="display: flex; gap: 14px; margin-bottom: 12px; font-size: 0.90rem; color: #a0aec0; background: #151b2b; padding: 10px 16px; border-radius: 8px; border: 1px solid #2d3748;">
+        <div style="display: flex; gap: 14px; margin-bottom: 12px; font-size: 0.90rem; color: #a0aec0; background: #151b2b; padding: 10px 16px; border-radius: 8px; border: 1px solid #2d3748; flex-wrap: wrap;">
             <span>発音: <b style="color: #00ffff; font-size: 1.05rem;">{current_kana}</b></span>
+            <span>母音音量: <b style="color: #48bb78;">Lv {cur_lvl} ({int(cur_v_gain * 100)}%)</b></span>
             <span>目標フォルマント: <b style="color: #ffd700;">F1={feat['target_f1']:.0f}Hz / F2={feat['target_f2']:.0f}Hz</b></span>
             <span>RMS音量: <b style="color: #68d391;">{rms_db:.1f} dBFS</b></span>
             <span>ピーク: <b style="color: #f6e05e;">{peak_val:.2f}</b></span>
-            <span>トークン: <b style="color: #9f7aea;">#{cur_token}</b></span>
+            <span>更新トークン: <b style="color: #9f7aea;">#{cur_token}</b></span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -349,15 +386,13 @@ def main():
                 <div style="color: #00ffff; font-size: 1.05rem; font-weight: bold; margin-bottom: 6px;">
                     🗣️ 【 {current_kana} 】 統合発音 (Ver 3.0)
                 </div>
-                <audio controls {ap_attr} style="width: 100%; height: 40px; border-radius: 4px;" id="aud_{sel_c}_{sel_v}_{t_stamp}">
-                    <source src="data:audio/wav;base64,{b64}#t={t_stamp}" type="audio/wav">
+                <audio controls {ap_attr} style="width: 100%; height: 40px; border-radius: 4px;" id="aud_{sel_c}_{sel_v}_{t_stamp}" src="data:audio/wav;base64,{b64}">
                     お使いのブラウザはaudio要素をサポートしていません。
                 </audio>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.audio(s_bytes, format="audio/wav")
 
     with p_col2:
         st.download_button(

@@ -52,8 +52,7 @@ def render_cache_busting_player(audio_bytes: bytes, label: str, unique_tag: str,
     html = f"""
     <div style="background: #151b2b; padding: 10px 14px; border-radius: 8px; border: 1px solid #2d3748; margin-bottom: 8px;">
         <div style="color: #00ffcc; font-size: 0.90rem; font-weight: bold; margin-bottom: 6px;">{label}</div>
-        <audio controls {ap_attr} style="width: 100%; height: 36px; border-radius: 4px;" id="{audio_id}">
-            <source src="data:audio/wav;base64,{b64}#t={t_stamp}" type="audio/wav">
+        <audio controls {ap_attr} style="width: 100%; height: 36px; border-radius: 4px;" id="{audio_id}" src="data:audio/wav;base64,{b64}">
             Your browser does not support the audio element.
         </audio>
     </div>

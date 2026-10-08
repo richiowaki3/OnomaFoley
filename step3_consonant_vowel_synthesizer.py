@@ -329,6 +329,7 @@ class ConsonantVowelSynthesizer:
         total_duration_sec: float = 0.38,
         osc_type: str = "saw",
         q_scale: float = 1.0,
+        vowel_volume: float = 0.35,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         高精細・明瞭弁別音節合成
@@ -398,8 +399,16 @@ class ConsonantVowelSynthesizer:
             ramp = min(N, int(0.025 * self.sr))
             glottal_env[:ramp] = 0.45 + 0.55 * np.linspace(0, 1, ramp)
 
-        # 全体減衰 (末尾50ms)
-        dec_len = int(0.050 * self.sr)
+        # 母音の自然な減衰 (vowel_volume に応じたディケイ制御)
+        # 音量が控えめなときはサスティンを短縮して子音アタックを際立たせる
+        v_vol_clamped = float(np.clip(vowel_volume, 0.05, 1.2))
+        decay_start = int((0.07 + 0.12 * v_vol_clamped) * self.sr)
+        if decay_start < N:
+            decay_curve = np.linspace(1.0, 0.05, N - decay_start) ** (1.6 / max(0.2, v_vol_clamped))
+            glottal_env[decay_start:] *= decay_curve.astype(np.float32)
+
+        # 全体減衰 (末尾30msでクリック防止)
+        dec_len = int(0.030 * self.sr)
         if dec_len < N:
             glottal_env[-dec_len:] *= 0.5 * (1.0 + np.cos(np.pi * np.linspace(0, 1, dec_len)))
 
@@ -453,10 +462,10 @@ class ConsonantVowelSynthesizer:
         # ---------------------------------------------------------------------
         # 5. 子音過渡 ＋ 母音共鳴の自然なクロスフェード結合
         # ---------------------------------------------------------------------
-        # 子音と母音のオーバーラップ加算
-        syllable_audio = (consonant_buf + 0.95 * vocal_tract_output).astype(np.float32)
+        # 子音と母音のオーバーラップ加算 (母音音量ゲインを直接反映)
+        syllable_audio = (consonant_buf + v_vol_clamped * vocal_tract_output).astype(np.float32)
 
-        # ピーク正規化
+        # ピーク正規化 (アタックがつぶれないよう、適度なヘッドルームを確保)
         peak = np.max(np.abs(syllable_audio))
         if peak > 1e-4:
             syllable_audio = syllable_audio * (0.92 / peak)
@@ -466,6 +475,7 @@ class ConsonantVowelSynthesizer:
             "vowel": v_key,
             "syllable": f"{c_key}{v_key}",
             "f0_base": f0,
+            "vowel_volume": v_vol_clamped,
             "vot_ms": vot_ms,
             "trans_ms": trans_ms,
             "locus_f1": locus_f1,
