@@ -66,7 +66,18 @@ TTS読み上げ音声および効果音実音から、以下の物理・音響�
 pip install numpy scipy matplotlib streamlit
 ```
 
-### 2. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
+### 2. 【決定版】3-Stage 直列パイプライン・オノマトペシンセサイザーの起動 (推奨)
+言葉の基礎音 ➔ 物理テンポ適応 ➔ 物理エフェクター仕上げの各段階を並列に聴き比べできるWeb UIです。
+```bash
+# Windows バッチで起動 (ポート 8520)
+launch_pipeline_demo.bat
+
+# またはスクリプト直接起動
+python run_pipeline_demo.py
+# => http://localhost:8520
+```
+
+### 3. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
 ```bash
 # Windows バッチで起動 (ポート 8517)
 launch_step3_consonant_vowel_demo.bat

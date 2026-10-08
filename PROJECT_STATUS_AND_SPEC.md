@@ -87,6 +87,47 @@
 `onomato-audio-analyzer` に実装されている `PhysicalAudioAnalyzer` と Step 3 シンセサイザーの結合により、以下のサイクルが完成します：
 
 ```
+---
+
+## 4. 【決定版】3-Stage 直列パイプライン・シンセサイザー (`onomatopoeia_pipeline_synthesizer.py`)
+
+「認知上の質感（言葉・オノマトペ）」と「現実の物理音（効果音）」の役割を明確に分離した最新の統合アーキテクチャです。
+
+```
+[入力: 日本語オノマトペ]
+       │
+       ▼
+【Stage 1: 認知上の質感（言葉）からの基礎音生成】
+  ・音素解析（子音アタック ＋ 母音フォルマント F1-F3）による音声学的合成
+       │
+       ▼
+【Stage 2: 現実の物理音からのテンポ感（Timing/ADSR）適応】
+  ・物理音から抽出したアタックタイミング・Jerk（加加速度）・ADSR時間軸の適用
+       │
+       ▼
+【Stage 3: 物理音エフェクターによる仕上げ（ノイズ重畳 ＆ 歯切れの制御）】
+  ・過渡ノイズ付加 ＋ Decay Cutoff Gate（余韻切断） ＋ Waveshaper ＋ Sub-Kick自動判別
+       │
+       ▼
+[出力: 高精度オノマトペ合成音]
+```
+
+### 4.1 各ステージの詳細
+* **Stage 1 (言語認知音)**: 音素パースにより、破裂音・摩擦音・鼻音・母音・促音（ッ）・撥音（ン）をSource-Filter理論で結合。言葉本来の認知上の質感を構成。
+* **Stage 2 (物理テンポ適応)**: 現実の物理音のアタック時間（Attack）、加加速度（Jerk）、減衰時定数（Decay）を掛け合わせ、リズム感とテンポ感を同期。
+* **Stage 3 (物理エフェクター仕上げ)**:
+  * アタック直後（0.5〜4ms）の過渡ノイズスパイク重畳
+  * 不要な余韻を急峻にカットする **Decay Cutoff Gate**
+  * 衝突のエッジを立てる **Waveshaper / Soft Clipper**
+  * 重打撃成分（40-80Hz）が含まれる場合のみ発動する **Sub-Kick**（「さらさら」等の摩擦音では強制OFF）
+
+---
+
+## 5. 効果音解析（PhysicalAudioAnalyzer）との結合仕様
+
+`onomato-audio-analyzer` に実装されている `PhysicalAudioAnalyzer` と Step 3 シンセサイザーの結合により、以下のサイクルが完成します：
+
+```
 [実録効果音 / 音声WAV] ──► [PhysicalAudioAnalyzer] ──► [物理特徴量パラメータ]
                                                                │
                                                                ▼
@@ -105,31 +146,41 @@
 
 ---
 
-## 5. 実行方法
+## 6. 実行方法
 
-### 5.1 Step 3 子音 ✕ 母音 統合Web UIの起動
+### 6.1 【決定版】3-Stage パイプライン・デモの起動 (聴き比べWeb UI)
+```bash
+# Windows
+launch_pipeline_demo.bat
+
+# コマンドライン直接 (ポート 8520)
+python run_pipeline_demo.py
+# => http://localhost:8520 で起動
+```
+
+### 6.2 Step 3 子音 ✕ 母音 統合Web UIの起動
 ```bash
 # Windows
 launch_step3_consonant_vowel_demo.bat
 
-# コマンドライン直接
+# コマンドライン直接 (ポート 8517)
 python run_step3.py
 # => http://localhost:8517 で起動
 ```
 
-### 5.2 デュアル・エンジン・デモの起動
+### 6.3 デュアル・エンジン・デモの起動
 ```bash
 launch_dual_engine_demo.bat
 ```
 
-### 5.3 効果音自動解析スクリプトの実行
+### 6.4 効果音自動解析スクリプトの実行
 ```bash
 python auto_physical_sound_analyzer.py --word ドカン
 ```
 
 ---
 
-## 6. 今後の開発ロードマップ
+## 7. 今後の開発ロードマップ
 
 1. **効果音解析フィードバックの完全自動化**:
    * 音声入力（録音またはWAVファイル）から自動で音素境界と物理特徴量を検出し、Step 3 の最適パラメータ（子音種類・母音音量レベル・Q値）を逆推定する「Auto-Tuner」の実装。
