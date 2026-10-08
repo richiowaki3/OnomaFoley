@@ -51,6 +51,11 @@ TTS読み上げ音声および効果音実音から、以下の物理・音響�
   * 14種の子音（k, sh, t, n, h, m, r, w, p, b, d, z, j, v）の物理過渡励起（Hertz接触スパイク、気流乱流ノイズ、鼻腔共鳴、舌先タップ）を4系統のエフェクト（Jerk Slope, Waveshaper Drive, Decay Gate, Sub-Bass Boost）で造形。
 * **【Step 3 Ver 3.0】明瞭弁別 子音 ✕ 母音 統合シンセサイザー (`step3_consonant_vowel_synthesizer.py` / `step3_consonant_vowel_demo.py`)**:
   * 高域共鳴（F2, F3）のコントラストを完全保持し、VOT（Voice Onset Time）およびLocus時変滑走により、日本語50音の「母音と子音の完全一体化（ひとつの口での発声）」を実現する最新統合Web UI。
+  * **🔊 母音音量 5段階ダイナミックバランス調整 (Lv 1: 18% 〜 Lv 5: 100%)**: 子音アタックと母音持続音の比率をワンクリックで調整可能（初期値: Lv 2 自然バランス推奨）。
+  * **動的ディケイ連動**: 母音音量に応じて持続音の減衰カーブを最適化し、歯切れの良いアタック感を担保。
+  * **プレイヤー一本化 ＆ キャッシュバスター**: HTML5 Base64 Data URI直接指定によりブラウザキャッシュを物理的に無効化し、ボタン押下時に即時自動発声（Autoplay）。
+
+詳細な仕様および解析パイプライン連携については、[PROJECT_STATUS_AND_SPEC.md](PROJECT_STATUS_AND_SPEC.md) をご覧ください。
 
 ---
 
