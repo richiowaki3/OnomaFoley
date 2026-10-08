@@ -46,6 +46,8 @@ from modular_dsp import (
     VocalTractBypassImpactEngine,
     UnifiedOnomatoSynthesizer,
     RoutingDecision,
+    SeedExcitationGenerator,
+    ConsonantClass,
 )
 from physical_audio_analyzer import PhysicalAudioAnalyzer
 
@@ -65,6 +67,7 @@ def plot_waveform_and_spectrogram(
     audio_h: np.ndarray,
     sr: int = 44100,
     vocalness: float = 0.5,
+    active_vowel: str = "a",
     decision: Optional[RoutingDecision] = None,
 ):
     """
@@ -76,9 +79,9 @@ def plot_waveform_and_spectrogram(
 
     bypass_label = " (声道Bypass)" if (decision and decision.bypass_vocal_tract) else ""
     titles = [
-        "音 A: 人間の声モデル (Voice A)",
+        f"音 A: 人間の声モデル [母音: /{active_vowel}/]",
         f"音 B: 物理衝撃モデル{bypass_label}",
-        f"音 C: ハイブリッド合成 (Vocalness: {vocalness:.2f})",
+        f"音 C: ハイブリッド合成 (Vocalness: {vocalness:.2f}) [/{active_vowel}/]",
     ]
     audios = [audio_v, audio_p, audio_h]
     line_colors = ["#38bdf8", "#f43f5e", "#a855f7"]
@@ -149,6 +152,33 @@ def plot_waveform_and_spectrogram(
     return fig
 
 
+def plot_seed_waveform(
+    seed_audio: np.ndarray,
+    sr: int = 44100,
+    consonant_class_name: str = "",
+    active_vowel: str = "a",
+):
+    """
+    Plots the microscopic transient acoustic seed waveform (first 15ms).
+    """
+    fig, ax = plt.subplots(figsize=(12, 2.4), constrained_layout=True)
+    fig.patch.set_facecolor("#111625")
+    ax.set_facecolor("#171e31")
+
+    # Show first 15ms or entire seed
+    max_samples = min(len(seed_audio), int(0.015 * sr))
+    t_ms = np.linspace(0, max_samples / sr * 1000.0, max_samples, endpoint=False)
+    ax.plot(t_ms, seed_audio[:max_samples], color="#34d399", linewidth=1.6)
+
+    title_txt = f"🌱 語根・最短基音励振 (Seed Excitation: 0〜15ms) ➔ 物理クラス: {consonant_class_name} ✕ 母音共鳴エフェクト: /{active_vowel}/"
+    ax.set_title(title_txt, fontsize=10, fontweight="bold", color="#34d399", pad=6)
+    ax.set_xlabel("Time [ms]", fontsize=8, color="#94a3b8")
+    ax.set_ylabel("Excitation Force", fontsize=8, color="#94a3b8")
+    ax.grid(True, color="#334155", linestyle="--", alpha=0.5)
+    ax.tick_params(colors="#94a3b8", labelsize=8)
+    return fig
+
+
 def main():
     st.set_page_config(
         page_title="オノマトペ・自動分岐＆デュアルエンジン・シンセサイザー",
@@ -208,10 +238,29 @@ def main():
     wav_analysis_res = None
 
     if input_mode == "プリセットから選択":
+        # Group by category
+        all_cats = sorted(list(set(cfg.get("category", "未分類") for cfg in DUAL_ENGINE_PRESETS.values())))
+        cat_filter = st.sidebar.selectbox("1. カテゴリー絞り込み", ["全カテゴリー (すべて)"] + all_cats)
+
+        if cat_filter != "全カテゴリー (すべて)":
+            filtered_presets = [k for k in preset_names if DUAL_ENGINE_PRESETS[k].get("category") == cat_filter]
+        else:
+            filtered_presets = preset_names
+
+        search_txt = st.sidebar.text_input("2. プリセット検索 (仮名)", placeholder="例: ドカン, ガシャン, カツン...")
+        if search_txt.strip():
+            matched = [k for k in filtered_presets if search_txt.strip() in k]
+            if matched:
+                filtered_presets = matched
+
+        default_idx = 0
+        if "ドカン" in filtered_presets:
+            default_idx = filtered_presets.index("ドカン")
+
         selected_word = st.sidebar.selectbox(
-            "オノマトペ・プリセット",
-            preset_names,
-            index=1,  # Default to 'ドカン'
+            f"3. オノマトペ・プリセット (全{len(filtered_presets)}件)",
+            filtered_presets,
+            index=default_idx,
         )
         cfg = DUAL_ENGINE_PRESETS[selected_word]
         default_weight = float(cfg["voice"]["effort"]["weight"])
@@ -284,7 +333,8 @@ def main():
         min_value=0.0,
         max_value=9.0,
         value=default_weight,
-        step=0.5,
+        step=0.1,
+        key=f"weight_{selected_word}",
         help="> 6.0 かつ濁音破裂音の場合、【パターンA: 物理重打撃】が自動発動します。",
     )
 
@@ -293,7 +343,8 @@ def main():
         min_value=0.0,
         max_value=9.0,
         value=default_time,
-        step=0.5,
+        step=0.1,
+        key=f"time_{selected_word}",
         help="> 6.0 かつ無声破裂音の場合、【パターンB: 物理硬質高域衝撃】が自動発動します。",
     )
 
@@ -302,7 +353,8 @@ def main():
         min_value=0.0,
         max_value=9.0,
         value=default_flow,
-        step=0.5,
+        step=0.1,
+        key=f"flow_{selected_word}",
     )
 
     st.sidebar.markdown("---")
@@ -366,7 +418,48 @@ def main():
     decision.has_sub_kick = sub_kick_toggle
 
     st.sidebar.markdown("---")
-    st.sidebar.subheader("3. モーフィング 制御")
+    st.sidebar.subheader("3. 語根Seed ✕ 母音共鳴エフェクト")
+
+    # Extract default vowel for selected word
+    preset_vowel = "a"
+    if selected_word in DUAL_ENGINE_PRESETS:
+        preset_vowel = DUAL_ENGINE_PRESETS[selected_word].get("voice", {}).get("vowel", "a")
+    elif any(c in selected_word for c in ["ア", "カ", "サ", "タ", "ナ", "ハ", "マ", "ヤ", "ラ", "ワ", "あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "ガ", "ザ", "ダ", "バ", "パ"]):
+        preset_vowel = "a"
+    elif any(c in selected_word for c in ["イ", "キ", "シ", "チ", "ニ", "ヒ", "ミ", "リ", "い", "き", "し", "ち", "に", "ひ", "み", "り", "ギ", "ジ", "ヂ", "ビ", "ピ"]):
+        preset_vowel = "i"
+    elif any(c in selected_word for c in ["ウ", "ク", "ス", "ツ", "ヌ", "フ", "ム", "ユ", "ル", "う", "く", "す", "つ", "ぬ", "ふ", "む", "ゆ", "る", "グ", "ズ", "ヅ", "ブ", "プ"]):
+        preset_vowel = "u"
+    elif any(c in selected_word for c in ["エ", "ケ", "セ", "テ", "ネ", "ヘ", "メ", "レ", "え", "け", "せ", "て", "ね", "へ", "め", "れ", "ゲ", "ゼ", "デ", "ベ", "ペ"]):
+        preset_vowel = "e"
+    elif any(c in selected_word for c in ["オ", "コ", "ソ", "ト", "ノ", "ホ", "モ", "ヨ", "ロ", "お", "こ", "そ", "と", "の", "ほ", "も", "よ", "ろ", "ゴ", "ゾ", "ド", "ボ", "ポ"]):
+        preset_vowel = "o"
+
+    vowel_options = [
+        f"単語本来の母音 (/{preset_vowel}/)",
+        "a (ア段: 開放・広帯域共鳴)",
+        "i (イ段: 高域集中・鋭角共鳴)",
+        "u (ウ段: 円唇・暗色低域共鳴)",
+        "e (エ段: 中高域明瞭フォルマント)",
+        "o (オ段: 低域強調・重厚共鳴)",
+    ]
+    vowel_choice = st.sidebar.selectbox(
+        "母音空間フィルター (Formant Bank)",
+        vowel_options,
+        index=0,
+        key=f"vowel_sb_{selected_word}",
+        help="語根の最短物理衝撃に対し、選択した母音の共鳴（フォルマントエフェクト）を施します。",
+    )
+    chosen_from_sb = preset_vowel if "単語本来" in vowel_choice else vowel_choice[0]
+    if f"vowel_state_{selected_word}" not in st.session_state:
+        st.session_state[f"vowel_state_{selected_word}"] = chosen_from_sb
+        st.session_state[f"vowel_sb_last_{selected_word}"] = chosen_from_sb
+    elif st.session_state.get(f"vowel_sb_last_{selected_word}") != chosen_from_sb:
+        st.session_state[f"vowel_state_{selected_word}"] = chosen_from_sb
+        st.session_state[f"vowel_sb_last_{selected_word}"] = chosen_from_sb
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("4. モーフィング 制御")
 
     vocalness = st.sidebar.slider(
         "Vocalness (0.0: 物理 ↔ 1.0: 声)",
@@ -377,12 +470,14 @@ def main():
         help="0.0: 物理衝撃モデルのみ | 0.5: 構造交差ハイブリッド | 1.0: 人間の声モデルのみ",
     )
 
+    default_stiff = float(cfg.get("physical", {}).get("stiffness", 0.85 if decision.pattern in ["A", "B"] else 0.40))
     stiffness = st.sidebar.slider(
         "Impact Stiffness (接触剛性)",
         min_value=0.1,
         max_value=1.0,
-        value=0.85 if decision.pattern in ["A", "B"] else 0.40,
+        value=default_stiff,
         step=0.05,
+        key=f"stiff_{selected_word}",
     )
 
     # -------------------------------------------------------------------------
@@ -458,6 +553,78 @@ def main():
         )
 
     # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # Step 1.5 Display: Phonetic Root Seed & Vowel Formant Bank Interactive Card
+    # -------------------------------------------------------------------------
+    from modular_dsp.dual_engine_morpher import VOWEL_FORMANTS
+
+    # Detect seed class preview
+    seed_class_preview = SeedExcitationGenerator.classify_consonant(selected_word)
+    seed_class_labels = {
+        ConsonantClass.HERTZIAN_IMPACT: ("剛体・接触衝突系 (/k, t, p, g, d, b/)", "Hertz非線形接触力学スパイク F(t) ∝ [sin(πt/tc)]^1.5 (0.5〜1.5ms)"),
+        ConsonantClass.TURBULENT_NOISE: ("摩擦・流体不連続系 (/s, h, ɸ, ɕ/)", "口腔狭窄部レイノルズ噴流乱流ノイズ (アタック15ms / ディケイ60ms)"),
+        ConsonantClass.VISCOUS_RELEASE: ("流体・粘性・水圧系 (/n, m, w, r/)", "低域閉鎖気圧からの過減衰流体開口キャビテーション・バースト"),
+        ConsonantClass.GLOTTAL_VOWEL: ("有声・母音声帯系 (/a, i, u, e, o/)", "Liljencrants-Fant (LF) モデル声帯体積流パルス列"),
+    }
+    c_label, c_desc = seed_class_labels.get(seed_class_preview, ("標準励振", ""))
+
+    st.markdown("---")
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border: 1px solid #6366f1; border-radius: 10px; padding: 16px 20px; margin-bottom: 16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h4 style="color:#818cf8; margin:0;">
+                    🌱 子音語根（最短基音Seed） ✕ 5母音空間エフェクト（Formant Filter Bank）
+                </h4>
+                <span style="background:#312e81; color:#c7d2fe; padding:4px 12px; border-radius:14px; font-size:0.82rem; font-weight:bold;">
+                    語根Seed: {c_label}
+                </span>
+            </div>
+            <div style="font-size:0.86rem; color:#cbd5e1; margin-bottom:10px; line-height:1.5;">
+                <b>【物理励振メカニズム】</b> {c_desc}<br/>
+                <b>【プロシージャル変形構想】</b> サンプル全体の音まねではなく、子音語根の最短物理衝撃（Seed）を生成し、そこに任意の母音フォルマント共鳴（a, i, u, e, o）を通過させることで、剛体接触の質感を保ちながら母音空間を変幻自在に変形させます。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Vowel Button Bar
+    st.markdown("**▼ 母音フォルマント共鳴エフェクトを選択（リアルタイム変形）**")
+    v_cols = st.columns(6)
+
+    # Initialize session state for active vowel
+    if f"vowel_state_{selected_word}" not in st.session_state:
+        st.session_state[f"vowel_state_{selected_word}"] = chosen_from_sb
+
+    v_buttons = [
+        ("orig", "原音", preset_vowel, f"原音 (/{preset_vowel}/)"),
+        ("a", "a (ア段)", "a", "a: 開放・広帯域 [780/1250/2600Hz]"),
+        ("i", "i (イ段)", "i", "i: 高域鋭角 [310/2250/2900Hz]"),
+        ("u", "u (ウ段)", "u", "u: 円唇暗色 [360/1100/2400Hz]"),
+        ("e", "e (エ段)", "e", "e: 中高明瞭 [520/1850/2650Hz]"),
+        ("o", "o (オ段)", "o", "o: 低域重厚 [480/880/2400Hz]"),
+    ]
+
+    for col, (btn_id, label, v_val, help_txt) in zip(v_cols, v_buttons):
+        with col:
+            cur_v = st.session_state[f"vowel_state_{selected_word}"]
+            is_active = (cur_v == preset_vowel) if btn_id == "orig" else (cur_v == v_val)
+            btn_type = "primary" if is_active else "secondary"
+            if st.button(label, key=f"btn_v_{btn_id}_{selected_word}", help=help_txt, type=btn_type, use_container_width=True):
+                st.session_state[f"vowel_state_{selected_word}"] = v_val
+                st.rerun()
+
+    active_vowel = st.session_state[f"vowel_state_{selected_word}"]
+    v_info_target = VOWEL_FORMANTS.get(active_vowel, VOWEL_FORMANTS["a"])
+    st.caption(
+        f"🎯 現在アクティブな母音共鳴: **/{active_vowel}/** ➔ "
+        f"F1 = **{v_info_target['f1']:.0f} Hz**, "
+        f"F2 = **{v_info_target['f2']:.0f} Hz**, "
+        f"F3 = **{v_info_target['f3']:.0f} Hz**"
+    )
+
+    # -------------------------------------------------------------------------
     # Step 2: Synthesis Execution
     # -------------------------------------------------------------------------
     synth = DualEngineSynthesizer(sample_rate=44100)
@@ -470,33 +637,95 @@ def main():
         stiffness_override=stiffness,
         flow_override=flow,
         sub_kick_override=decision.has_sub_kick,
+        vowel_override=active_vowel,
     )
 
     audio_v = res["audio_voice"]
     audio_p = res["audio_physical"]
     audio_h = res["audio_hybrid"]
+    seed_audio = res["seed_audio"]
+    seed_vowel_audio = res.get("audio_seed_vowel", seed_audio)
     sr = res["sample_rate"]
+
+    # Seed Waveform & Direct Morph Expandable Inspector
+    with st.expander(f"🌱 語根基音 ＆ 母音フォルマント直接変形音 [/{active_vowel}/段]（詳細インスペクター）", expanded=True):
+        seed_fig = plot_seed_waveform(
+            seed_audio,
+            sr=sr,
+            consonant_class_name=c_label,
+            active_vowel=active_vowel,
+        )
+        st.pyplot(seed_fig, use_container_width=True)
+        plt.close(seed_fig)
+
+        c_s1, c_s2, c_s3 = st.columns([1, 1, 1.4])
+        with c_s1:
+            st.markdown(f"<b>① 語根・最短基音（Seedのみ）</b>", unsafe_allow_html=True)
+            seed_wav = audio_to_bytes(seed_audio, sr=sr)
+            st.audio(seed_wav, format="audio/wav")
+            st.download_button(
+                "⬇️ 語根Seed (WAV)",
+                data=seed_wav,
+                file_name=f"{selected_word}_seed_raw.wav",
+                mime="audio/wav",
+                use_container_width=True,
+            )
+        with c_s2:
+            st.markdown(f"<b>② 語根 ✕ 母音共鳴 [/{active_vowel}/段] 変形音</b>", unsafe_allow_html=True)
+            sv_wav = audio_to_bytes(seed_vowel_audio, sr=sr)
+            st.audio(sv_wav, format="audio/wav")
+            st.download_button(
+                f"⬇️ 語根 ✕ /{active_vowel}/ (WAV)",
+                data=sv_wav,
+                file_name=f"{selected_word}_seed_morph_{active_vowel}.wav",
+                mime="audio/wav",
+                use_container_width=True,
+            )
+        with c_s3:
+            st.markdown(
+                f"""
+                <div style="background:#1e1b4b; border: 1px solid #4f46e5; border-radius: 8px; padding: 10px 14px; font-size:0.82rem; color:#cbd5e1; line-height:1.45;">
+                    <b>✨ 語根変形の聞きどころ:</b><br/>
+                    ①の最短衝撃（kの金属接触等）に対し、上の母音ボタン（a/i/u/e/o）を切り替えると、②の音が<b>即座に「カッ・キッ・クッ・ケッ・コッ」へと母音変形</b>します！
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     # Waveform & Spectrogram Visualization
     st.subheader("📊 リアルタイム波形 ＆ スペクトログラム比較 (A/B/C 三系統)")
     fig = plot_waveform_and_spectrogram(
         audio_v, audio_p, audio_h,
-        sr=sr, vocalness=vocalness, decision=decision,
+        sr=sr, vocalness=vocalness, active_vowel=active_vowel, decision=decision,
     )
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
-    # 3-Column Audio Player
+    # 3-Column Audio Player with Perceptual Guide
     st.subheader("🔊 比較試聴プレイヤー (A/B/C 三系統)")
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border: 1px solid #6366f1; border-radius: 8px; padding: 12px 18px; margin-bottom: 14px; font-size:0.87rem; color:#cbd5e1; line-height:1.6;">
+            <b>💡 母音エフェクトの聴き比べガイド（なぜ音が違うのか・違わないのか）:</b><br/>
+            ・<b>🔴 音 B (物理衝撃モデル)</b>: 「声道バイパス（剛体物理振動そのもの）」のため、母音エフェクトは適用されず<b>音は変化しません</b>。<br/>
+            ・<b>🔵 音 A (人間の声モデル)</b>: 母音フォルマント（F1/F2/F3）が主役の人体声道モデルです。<b>母音ボタンで劇的に音色が変わります</b>。<br/>
+            ・<b>🟣 音 C (ハイブリッド交差合成)</b>: 物理衝撃の質感に母音フォルマントがブレンドされます。サイドバーの Vocalness を <b>0.40〜0.80</b> に設定すると、剛体の芯を残したまま母音変化が鮮明に際立ちます。<br/>
+            ・<b>✨ 語根 ✕ 母音変形 (上のパネル②)</b>: 語根アタック（金属/剛体）に直接母音フォルマントを通過させた純粋な変形音です。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown(
-            """
+            f"""
             <div class="metric-card" style="border-left: 4px solid #38bdf8;">
                 <h4 style="color:#38bdf8; margin:0 0 8px 0;">🔵 音 A: 人間の声モデル (Engine A)</h4>
                 <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
-                    声門波 (Saw/Pulse) ＋ 3並列母音フォルマント (F1, F2, F3) ＋ Laban動的モジュレーター
+                    母音変形適用中: <b style="color:#38bdf8; font-size:1.05rem;">[/{active_vowel}/段]</b><br/>
+                    声門波 (Saw/Pulse) ＋ 3並列高Q母音フォルマント ＋ 動的モジュレーター
                 </p>
             </div>
             """,
@@ -507,7 +736,7 @@ def main():
         st.download_button(
             "⬇️ 音A (WAV) 保存",
             data=wav_v,
-            file_name=f"{selected_word}_voice_A.wav",
+            file_name=f"{selected_word}_voice_A_{active_vowel}.wav",
             mime="audio/wav",
             use_container_width=True,
         )
@@ -518,7 +747,8 @@ def main():
             <div class="metric-card" style="border-left: 4px solid #f43f5e;">
                 <h4 style="color:#f43f5e; margin:0 0 8px 0;">🔴 音 B: 物理衝撃モデル (Engine B)</h4>
                 <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
-                    {decision.engine_name}: Hertz衝撃スパイク ＋ 剛体モーダル合成 ＋ 選択的キック
+                    <span style="color:#94a3b8; font-size:0.82rem;">（※声道Bypassのため母音は変化しません）</span><br/>
+                    {decision.engine_name}: 語根Seed衝撃 ＋ 剛体モーダル合成 ＋ 選択的キック
                 </p>
             </div>
             """,
@@ -540,7 +770,8 @@ def main():
             <div class="metric-card" style="border-left: 4px solid #a855f7;">
                 <h4 style="color:#c084fc; margin:0 0 8px 0;">🟣 音 C: ハイブリッド交差合成 (Engine C)</h4>
                 <p style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">
-                    Vocalness <b>{vocalness:.2f}</b>: 物理衝撃が声を打撃し、声帯が剛体を共鳴させる新次元質感
+                    母音共鳴注入中: <b style="color:#c084fc; font-size:1.05rem;">[/{active_vowel}/段]</b> (Vocalness: {vocalness:.2f})<br/>
+                    語根Seed ✕ 母音共鳴 ✕ 剛体モーダル共振
                 </p>
             </div>
             """,
@@ -551,10 +782,77 @@ def main():
         st.download_button(
             "⬇️ 音C (WAV) 保存",
             data=wav_h,
-            file_name=f"{selected_word}_hybrid_C.wav",
+            file_name=f"{selected_word}_hybrid_C_{active_vowel}.wav",
             mime="audio/wav",
             use_container_width=True,
         )
+
+    # 4th Reference: Studio Real Master Sound (Sound Ideas 6000 Adopted Sampler Slice)
+    real_wav_candidate = None
+    if selected_word in DUAL_ENGINE_PRESETS:
+        preset_info = DUAL_ENGINE_PRESETS[selected_word]
+        orig_track = preset_info.get("original_track", "")
+        wav_rel = preset_info.get("wav_relative_path", "")
+        p_word = preset_info.get("word", selected_word)
+        cat = preset_info.get("category", "")
+
+        # Search in Adopted Sampler directory
+        track_clean = orig_track.split("] ")[-1] if "] " in orig_track else orig_track
+        target_name = f"【{p_word}】_{track_clean}"
+        cand1 = Path(r"D:\sound ideas wav\SoundIdeas_Series6000_Adopted_Samplers") / cat / p_word / target_name
+        if cand1.exists():
+            real_wav_candidate = cand1
+        elif wav_rel and Path(wav_rel).exists():
+            real_wav_candidate = Path(wav_rel)
+
+    if real_wav_candidate and real_wav_candidate.exists():
+        st.markdown("---")
+        st.subheader("🎧 スタジオ実音リファレンス (Sound Ideas Series 6000 採用サンプラー音)")
+        with open(real_wav_candidate, "rb") as f:
+            real_bytes = f.read()
+        c_r1, c_r2 = st.columns([1.5, 3.5])
+        with c_r1:
+            st.audio(real_bytes, format="audio/wav")
+        with c_r2:
+            st.info(f"実音WAV: `{real_wav_candidate.name}`\n\n"
+                    f"★ この本物のスタジオ生音から実測されたアタック（{cfg.get('attack_time_ms', 5):.1f}ms）と減衰（{cfg.get('decay_time_ms', 20):.1f}ms）に基づき、シンセサイザーの音長（{len(audio_h)/sr*1000:.0f}ms）が厳密に同期トレースされています！")
+
+        # Real Sound vs Synth Audio Waveform Overlay
+        import scipy.io.wavfile as sc_wav
+        try:
+            r_sr, r_raw = sc_wav.read(real_wav_candidate)
+            if r_raw.ndim > 1:
+                r_raw = r_raw.mean(axis=1)
+            r_peak = np.max(np.abs(r_raw))
+            if r_peak > 1e-4:
+                r_norm = r_raw.astype(np.float32) / r_peak
+                act_idx = np.where(np.abs(r_norm) > 0.04)[0]
+                if len(act_idx) > 0:
+                    start_pad = max(0, act_idx[0] - int(0.005 * r_sr))
+                    end_pad = min(len(r_norm), act_idx[-1] + int(0.03 * r_sr))
+                    r_crop = r_norm[start_pad:end_pad]
+                    t_crop = np.linspace(0, len(r_crop) / r_sr * 1000.0, len(r_crop))
+
+                    fig_cmp, ax_cmp = plt.subplots(figsize=(11, 2.3))
+                    fig_cmp.patch.set_facecolor("#111625")
+                    ax_cmp.set_facecolor("#171e31")
+                    ax_cmp.plot(t_crop, r_crop, color="#38bdf8", lw=1.2, alpha=0.85, label="スタジオ実音 (Real WAV 発音部)")
+
+                    t_h = np.linspace(0, len(audio_h) / sr * 1000.0, len(audio_h))
+                    h_norm = audio_h / (np.max(np.abs(audio_h)) + 1e-6)
+                    ax_cmp.plot(t_h, h_norm * 0.9, color="#ec4899", lw=1.2, linestyle="--", alpha=0.85, label=f"シンセ合成音 (Hybrid C, 音長 {len(audio_h)/sr*1000:.0f}ms)")
+
+                    ax_cmp.set_title("🔍 アタック ＆ 減衰の波形トレース一致比較 (実音 vs シンセ音)", fontsize=10, color="#f8fafc")
+                    ax_cmp.set_xlabel("Time [ms]", fontsize=8, color="#94a3b8")
+                    ax_cmp.set_ylabel("Amp", fontsize=8, color="#94a3b8")
+                    ax_cmp.set_ylim(-1.05, 1.05)
+                    ax_cmp.legend(loc="upper right", fontsize=8)
+                    ax_cmp.grid(True, color="#334155", linestyle="--", alpha=0.4)
+                    ax_cmp.tick_params(colors="#94a3b8", labelsize=8)
+                    st.pyplot(fig_cmp, use_container_width=True)
+                    plt.close(fig_cmp)
+        except Exception:
+            pass
 
     # Educational / Technical Documentation
     st.markdown("---")

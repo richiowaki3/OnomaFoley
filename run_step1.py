@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-run_dual_engine.py: Robust launcher for Dual-Engine Demo.
-Finds an available free port automatically to prevent "Port is not available" errors.
+run_step1.py: Robust launcher for Step 1 Vowel Synthesizer Demo.
+Auto-detects free ports to ensure reliable startup without port conflicts.
 """
 
 import sys
@@ -23,18 +23,18 @@ def is_port_available(port: int) -> bool:
 
 def main():
     root = Path(__file__).resolve().parent
-    script = root / "dual_engine_demo.py"
+    script = root / "step1_vowel_demo.py"
 
-    preferred_ports = [8504, 8505, 8506, 8507, 8508, 8509, 8510, 8511, 8512]
+    preferred_ports = [8515, 8516, 8517, 8518, 8519, 8520]
 
     for port in preferred_ports:
         if not is_port_available(port):
             continue
 
-        print("=" * 65)
-        print(f"[OnomaDict] Launching Dual-Engine Synthesizer Demo on Port {port}...")
+        print("=" * 68)
+        print(f"[Step 1] Launching Vowel Space Formant Synthesizer on Port {port}...")
         print(f"  URL: http://localhost:{port}")
-        print("=" * 65)
+        print("=" * 68)
 
         cmd = [
             sys.executable,

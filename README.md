@@ -42,8 +42,15 @@ TTS読み上げ音声および効果音実音から、以下の物理・音響�
 - **低域過渡強度（Sub-Kick / Crest Factor）**: 瞬間的な衝撃波の尖鋭度
 - **母音フォルマント周波数（F1, F2）**: 声の調音点・共鳴構造
 
-### 3. 音響物理拡張辞書 (`data/onomatopoeia_dictionary_enriched.json`)
-7,356語（日本語・韓国語・アフリカ語）のオノマトペ辞書に対し、理論的Laban Effortベクトルと実測音響特徴量（`measured_acoustic`, `measured_effort`, `effort_delta`）を完全統合した拡張データセットです。
+### 4. 段階的検証プロシージャル・シンセサイザー（Step 1 〜 Step 3 Ver 3.0）
+音響音声学（Gunnar Fantの音響モデル、Locus理論）と接触力学（Hertz弾性衝突）に基づき、日本語50音およびオノマトペを段階的かつ透明に設計・検証するモジュール群です：
+
+* **【Step 1】母音空間フォルマント・シンセサイザー (`step1_vowel_synthesizer.py` / `step1_vowel_demo.py`)**:
+  * 3並列Biquadフォルマント共鳴器（F1, F2, F3）＋口唇放射（+6dB/oct）により、純粋な母音（a, i, u, e, o）を生成。
+* **【Step 2】子音基音（14音素）物理過渡シンセサイザー (`step2_consonant_synthesizer.py` / `step2_consonant_demo.py`)**:
+  * 14種の子音（k, sh, t, n, h, m, r, w, p, b, d, z, j, v）の物理過渡励起（Hertz接触スパイク、気流乱流ノイズ、鼻腔共鳴、舌先タップ）を4系統のエフェクト（Jerk Slope, Waveshaper Drive, Decay Gate, Sub-Bass Boost）で造形。
+* **【Step 3 Ver 3.0】明瞭弁別 子音 ✕ 母音 統合シンセサイザー (`step3_consonant_vowel_synthesizer.py` / `step3_consonant_vowel_demo.py`)**:
+  * 高域共鳴（F2, F3）のコントラストを完全保持し、VOT（Voice Onset Time）およびLocus時変滑走により、日本語50音の「母音と子音の完全一体化（ひとつの口での発声）」を実現する最新統合Web UI。
 
 ---
 
@@ -54,7 +61,16 @@ TTS読み上げ音声および効果音実音から、以下の物理・音響�
 pip install numpy scipy matplotlib streamlit
 ```
 
-### 2. デュアル・エンジン・デモの起動 (Web UI)
+### 2. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
+```bash
+# Windows バッチで起動 (ポート 8517)
+launch_step3_consonant_vowel_demo.bat
+
+# またはスクリプト直接起動
+python run_step3.py
+```
+
+### 3. デュアル・エンジン・デモの起動 (Web UI)
 ブラウザ上で声モデル、物理衝撃モデル、ハイブリッド交差点合成の波形・スペクトログラムをリアルタイムに比較・試聴できます。
 
 ```bash
@@ -65,7 +81,7 @@ launch_dual_engine_demo.bat
 streamlit run dual_engine_demo.py
 ```
 
-### 3. 単語の自動物理音響解析
+### 4. 単語の自動物理音響解析
 ```bash
 python auto_physical_sound_analyzer.py --word ドカン
 ```
