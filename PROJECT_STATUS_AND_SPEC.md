@@ -123,7 +123,29 @@
 
 ---
 
-## 5. 効果音解析（PhysicalAudioAnalyzer）との結合仕様
+## 5. 【2D XYパッド】オノマトペテクスチャ空間マッピング ＆ リピートシンセサイザー (`onomatopoeia_2d_space.py` / `onomatopoeia_xy_pad_demo.py`)
+
+中心を `(0, 0)` とした広大な2次元平面パッド上にオノマトペを配置し、空白部分も含めて連続的に物理パラメータを2次元補間。クリックすると音が小気味よいテンポで自動リピート（ループ再生）されます。
+
+```
+                    🔺 上方向: 細かい・微細 (サラサラ / カサカサ)
+                                      │
+     🌵 左方向: 乾いた・乾燥          │           💧 右方向: 水分量が多い・湿潤
+     (ぱさぱさ / カサカサ)           ┼───────►   (びちゃびちゃ / ぬるぬる)
+                                      │  (0, 0)
+                                      │  中立・硬質 (カツン / トントン)
+                    🔻 下方向: 粗い・打撃衝撃 (ガタガタ / ドカン)
+```
+
+* **軸の物理マッピング**:
+  * **縦軸 Y (粒度 / Granularity)**: $+1.0$ (微細摩擦) 〜 $-1.0$ (粗大衝突・重打撃)
+  * **横軸 X (湿度 / Moisture)**: $-1.0$ (乾燥・急峻Cutoff Gate) 〜 $+1.0$ (湿潤・粘性LPF減衰)
+* **リズミック・リピート機能**:
+  * パッド上をクリック・ドラッグすると、その座標に対応するオノマトペが設定テンポ（BPM 120 / 約500ms周期）でリズミカルに繰り返し再生されます。
+
+---
+
+## 6. 効果音解析（PhysicalAudioAnalyzer）との結合仕様
 
 `onomato-audio-analyzer` に実装されている `PhysicalAudioAnalyzer` と Step 3 シンセサイザーの結合により、以下のサイクルが完成します：
 
@@ -146,9 +168,19 @@
 
 ---
 
-## 6. 実行方法
+## 7. 実行方法
 
-### 6.1 【決定版】3-Stage パイプライン・デモの起動 (聴き比べWeb UI)
+### 7.1 【2D XYパッド】リピートシンセサイザーの起動 (最新推奨)
+```bash
+# Windows
+launch_xy_pad_demo.bat
+
+# コマンドライン直接 (ポート 8522)
+python run_xy_pad.py
+# => http://localhost:8522 で起動
+```
+
+### 7.2 【決定版】3-Stage パイプライン・デモの起動 (聴き比べWeb UI)
 ```bash
 # Windows
 launch_pipeline_demo.bat
@@ -158,7 +190,7 @@ python run_pipeline_demo.py
 # => http://localhost:8520 で起動
 ```
 
-### 6.2 Step 3 子音 ✕ 母音 統合Web UIの起動
+### 7.3 Step 3 子音 ✕ 母音 統合Web UIの起動
 ```bash
 # Windows
 launch_step3_consonant_vowel_demo.bat
@@ -168,12 +200,12 @@ python run_step3.py
 # => http://localhost:8517 で起動
 ```
 
-### 6.3 デュアル・エンジン・デモの起動
+### 7.4 デュアル・エンジン・デモの起動
 ```bash
 launch_dual_engine_demo.bat
 ```
 
-### 6.4 効果音自動解析スクリプトの実行
+### 7.5 効果音自動解析スクリプトの実行
 ```bash
 python auto_physical_sound_analyzer.py --word ドカン
 ```

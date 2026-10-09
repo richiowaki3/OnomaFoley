@@ -66,7 +66,18 @@ TTS読み上げ音声および効果音実音から、以下の物理・音響�
 pip install numpy scipy matplotlib streamlit
 ```
 
-### 2. 【決定版】3-Stage 直列パイプライン・オノマトペシンセサイザーの起動 (推奨)
+### 2. 【2D XYパッド】オノマトペテクスチャ空間マッピング ＆ リピートシンセサイザー (最新推奨)
+中心(0, 0)を起点に、粒度（上: サラサラ ➔ 下: ガタガタ）✕ 湿度（左: ぱさぱさ ➔ 右: びちゃびちゃ）をパッド上でクリックすると、音が小気味よくリピート再生されます。
+```bash
+# Windows バッチで起動 (ポート 8522)
+launch_xy_pad_demo.bat
+
+# またはスクリプト直接起動
+python run_xy_pad.py
+# => http://localhost:8522
+```
+
+### 3. 【決定版】3-Stage 直列パイプライン・オノマトペシンセサイザーの起動
 言葉の基礎音 ➔ 物理テンポ適応 ➔ 物理エフェクター仕上げの各段階を並列に聴き比べできるWeb UIです。
 ```bash
 # Windows バッチで起動 (ポート 8520)
@@ -77,7 +88,7 @@ python run_pipeline_demo.py
 # => http://localhost:8520
 ```
 
-### 3. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
+### 4. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
 ```bash
 # Windows バッチで起動 (ポート 8517)
 launch_step3_consonant_vowel_demo.bat
