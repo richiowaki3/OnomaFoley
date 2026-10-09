@@ -219,7 +219,14 @@ def main():
                 st.success("✅ WAVファイルの読み込み・物理特徴量抽出に成功しました！")
 
         st.markdown("---")
-        st.subheader("3. 試聴 ＆ 再生設定")
+        st.subheader("3. エフェクト詳細ブースト (Stage 3)")
+        noise_boost = st.slider("過渡ノイズ強度ブースト", 0.5, 3.0, 1.4, 0.1)
+        drive_boost = st.slider("Waveshaper 歪みドライブ", 0.8, 3.0, 1.5, 0.1)
+        gate_tightness = st.slider("余韻切断キレ度 (Cut Gate)", 0.8, 3.0, 1.4, 0.1, help="値を大きくすると余韻をより急速・タイトに切断し、アタックのキレを極限化します。")
+        sub_boost = st.slider("Sub-Kick 重低音パンチ", 0.5, 3.0, 1.5, 0.1, help="重打撃時の40-80Hz低域エネルギーを増強します。")
+
+        st.markdown("---")
+        st.subheader("4. 試聴 ＆ 再生設定")
         autoplay = st.toggle("🔊 選択時に自動発声 (Autoplay)", value=True)
 
     # -------------------------------------------------------------------------
@@ -287,12 +294,53 @@ def main():
             st.caption("※ WAV未アップロードのためデフォルトの物理プロファイル（硬質クリスプ）を使用します。")
 
     # -------------------------------------------------------------------------
+    # 【操作部 3】物理エフェクト仕上げ強度 (ガッツリ度・迫力設定)
+    # -------------------------------------------------------------------------
+    st.markdown("### 3️⃣ 物理エフェクト仕上げ強度（ガッツリ度）")
+    st.caption("Stage 3 における過渡ノイズ、Waveshaper歪み、余韻切断Gateの強さを調整します。")
+
+    if "effect_preset" not in st.session_state:
+        st.session_state["effect_preset"] = "heavy"
+
+    EFFECT_PRESETS = {
+        "natural": {"intensity": 1.0, "label": "🌿 ナチュラル (1.0x)", "desc": "控えめ・原音の質感を重視"},
+        "punchy": {"intensity": 1.4, "label": "⚡ 強め (1.4x)", "desc": "メリハリのある衝突アタック"},
+        "heavy": {"intensity": 1.8, "label": "🔥 ガッツリ・激強 (1.8x) ⭐推奨", "desc": "鋭角スパイク・非線形歪み・急速切断Gateの本格仕上げ"},
+        "extreme": {"intensity": 2.5, "label": "💥 極限 MAX (2.5x)", "desc": "映画トレイラー級の最大打撃パンチ ＆ 超硬質エッジ"},
+    }
+
+    eff_cols = st.columns(4)
+    for e_key, e_info in EFFECT_PRESETS.items():
+        is_cur_eff = (st.session_state["effect_preset"] == e_key)
+        b_type = "primary" if is_cur_eff else "secondary"
+        idx = list(EFFECT_PRESETS.keys()).index(e_key)
+        with eff_cols[idx]:
+            if st.button(e_info["label"], key=f"btn_eff_{e_key}", type=b_type, use_container_width=True):
+                st.session_state["effect_preset"] = e_key
+                st.session_state["pipeline_token"] += 1
+                st.rerun()
+
+    cur_eff_key = st.session_state["effect_preset"]
+    base_intensity = EFFECT_PRESETS[cur_eff_key]["intensity"]
+    st.markdown(
+        f"<div style='font-size: 0.85rem; color: #a0aec0; margin-top: -4px; margin-bottom: 12px;'>"
+        f"現在のエフェクト設定: <b style='color: #4ade80;'>{EFFECT_PRESETS[cur_eff_key]['label']}</b> ── {EFFECT_PRESETS[cur_eff_key]['desc']}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # -------------------------------------------------------------------------
     # パイプライン実行
     # -------------------------------------------------------------------------
     result = synthesizer.process_pipeline(
         word=cur_word,
         physical_source=phys_source,
         f0=f0,
+        effect_intensity=base_intensity,
+        noise_boost=noise_boost,
+        drive_boost=drive_boost,
+        gate_tightness=gate_tightness,
+        sub_boost=sub_boost,
     )
 
     st.markdown("---")
@@ -385,12 +433,14 @@ def main():
             unsafe_allow_html=True,
         )
         sub_str = "ON (40-80Hz)" if result.stage3.metrics['sub_kick'] else "OFF"
+        drv_val = result.stage3.metrics.get('total_drive', result.stage3.metrics.get('drive', 3.0))
+        ns_val = result.stage3.metrics.get('noise_gain', 1.0)
         st.markdown(
             f"""
             <div style="font-size: 0.82rem; color: #94a3b8; background: #111625; padding: 8px 12px; border-radius: 6px;">
-                <b>特徴:</b> ノイズ付加 ＆ 歯切れ切断 ＆ 歪み<br>
+                <b>特徴:</b> 🔥 ガッツリエフェクト仕上げ<br>
                 <b>余韻切断Gate:</b> {result.stage3.metrics['cutoff_gate_ms']} ms<br>
-                <b>Waveshaper:</b> Drive x{result.stage3.metrics['drive']}<br>
+                <b>過渡ノイズ強度:</b> x{ns_val:.2f} ｜ <b>Waveshaper:</b> Drive x{drv_val:.1f}<br>
                 <b>Sub-Kick:</b> <b style="color: {'#4ade80' if result.stage3.metrics['sub_kick'] else '#94a3b8'};">{sub_str}</b>
             </div>
             """,

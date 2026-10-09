@@ -107,76 +107,76 @@ PHYSICAL_SOUND_PRESETS: Dict[str, Dict[str, Any]] = {
     "crisp_wood": {
         "name": "硬質クリスプ衝突 (カツン / 木・金属ブロック)",
         "category": "crisp_crack",
-        "attack_time_ms": 1.5,
-        "decay_time_ms": 48.0,
-        "jerk_slope": 2.4,          # 立ち上がり加加速度
-        "waveshaper_drive": 2.2,     # エッジ飽和
-        "transient_noise_gain": 0.45,# 過渡ノイズ強度
-        "decay_cutoff_gate_ms": 65.0,# 余韻切断ポイント
+        "attack_time_ms": 1.2,
+        "decay_time_ms": 38.0,
+        "jerk_slope": 2.8,          # 立ち上がり加加速度
+        "waveshaper_drive": 3.8,     # エッジ飽和
+        "transient_noise_gain": 0.85,# 過渡ノイズ強度
+        "decay_cutoff_gate_ms": 42.0,# 余韻急峻切断
         "has_sub_kick": False,       # 重低音バイパス
-        "crest_factor_target": 22.0,
+        "crest_factor_target": 24.0,
     },
     "heavy_impact": {
         "name": "重量級衝撃爆発 (ドカン / ズシン / 重打撃)",
         "category": "heavy_impact",
-        "attack_time_ms": 3.2,
-        "decay_time_ms": 220.0,
-        "jerk_slope": 1.8,
-        "waveshaper_drive": 3.2,
-        "transient_noise_gain": 0.55,
-        "decay_cutoff_gate_ms": 240.0,
+        "attack_time_ms": 2.5,
+        "decay_time_ms": 240.0,
+        "jerk_slope": 2.2,
+        "waveshaper_drive": 4.5,
+        "transient_noise_gain": 0.95,
+        "decay_cutoff_gate_ms": 260.0,
         "has_sub_kick": True,        # Sub-Kick ON (40-80Hz)
-        "sub_kick_gain": 0.85,
-        "sub_kick_f0": 72.0,
+        "sub_kick_gain": 1.35,       # 重低音パンチ
+        "sub_kick_f0": 68.0,
         "crest_factor_target": 18.0,
     },
     "friction_sand": {
         "name": "広帯域気流摩擦 (サラサラ / シュー / 砂・風)",
         "category": "friction",
-        "attack_time_ms": 35.0,
-        "decay_time_ms": 220.0,
-        "jerk_slope": 0.8,
-        "waveshaper_drive": 1.1,
-        "transient_noise_gain": 0.60,
-        "decay_cutoff_gate_ms": 280.0,
+        "attack_time_ms": 28.0,
+        "decay_time_ms": 240.0,
+        "jerk_slope": 1.1,
+        "waveshaper_drive": 2.2,
+        "transient_noise_gain": 1.10,
+        "decay_cutoff_gate_ms": 260.0,
         "has_sub_kick": False,       # Sub-Kick 強制OFF
-        "crest_factor_target": 11.0,
+        "crest_factor_target": 12.0,
     },
     "crisp_clack": {
         "name": "乾いたクラック・スナップ (パチパチ / 拍手 / 破裂)",
         "category": "crisp_crack",
-        "attack_time_ms": 1.8,
-        "decay_time_ms": 60.0,
-        "jerk_slope": 2.2,
-        "waveshaper_drive": 2.5,
-        "transient_noise_gain": 0.50,
-        "decay_cutoff_gate_ms": 75.0,
+        "attack_time_ms": 1.4,
+        "decay_time_ms": 48.0,
+        "jerk_slope": 2.6,
+        "waveshaper_drive": 3.6,
+        "transient_noise_gain": 0.95,
+        "decay_cutoff_gate_ms": 52.0,
         "has_sub_kick": False,
-        "crest_factor_target": 20.0,
+        "crest_factor_target": 22.0,
     },
     "light_tap": {
         "name": "小刻みタップ・足音 (トントン / タッ)",
         "category": "step_tap",
-        "attack_time_ms": 2.2,
-        "decay_time_ms": 75.0,
-        "jerk_slope": 1.9,
-        "waveshaper_drive": 1.8,
-        "transient_noise_gain": 0.35,
-        "decay_cutoff_gate_ms": 90.0,
+        "attack_time_ms": 1.8,
+        "decay_time_ms": 55.0,
+        "jerk_slope": 2.3,
+        "waveshaper_drive": 3.0,
+        "transient_noise_gain": 0.75,
+        "decay_cutoff_gate_ms": 62.0,
         "has_sub_kick": False,
-        "crest_factor_target": 19.0,
+        "crest_factor_target": 20.0,
     },
     "suction_stop": {
         "name": "吸着・粘性停止 (ピタッ / ヌルッ)",
         "category": "suction_stop",
-        "attack_time_ms": 3.5,
-        "decay_time_ms": 55.0,
-        "jerk_slope": 2.0,
-        "waveshaper_drive": 1.6,
-        "transient_noise_gain": 0.30,
-        "decay_cutoff_gate_ms": 70.0,
+        "attack_time_ms": 2.6,
+        "decay_time_ms": 42.0,
+        "jerk_slope": 2.5,
+        "waveshaper_drive": 3.2,
+        "transient_noise_gain": 0.70,
+        "decay_cutoff_gate_ms": 48.0,
         "has_sub_kick": False,
-        "crest_factor_target": 17.0,
+        "crest_factor_target": 18.0,
     },
 }
 
@@ -490,54 +490,71 @@ class OnomatopoeiaPipelineSynthesizer:
         self,
         stage2_output: StageOutput,
         physical_profile: Dict[str, Any],
+        effect_intensity: float = 1.6,
+        noise_boost: float = 1.4,
+        drive_boost: float = 1.5,
+        gate_tightness: float = 1.4,
+        sub_boost: float = 1.5,
     ) -> StageOutput:
         """
-        Step 3: 物理音エフェクターで仕上げ:
-          1. 過渡ノイズ重畳 (Transient Noise Injection: 0.5〜4ms)
-          2. Decay Cutoff Gate (不要な余韻を急峻にカットしてキレを出す)
-          3. Waveshaper / Soft Clipper (立ち上がりのエッジ強調)
-          4. Sub-Kick 要否の自動判別 (40-80Hz 重打撃のみ)
+        Step 3: 物理音エフェクターでガッツリ仕上げ:
+          1. 過渡ノイズ重畳 (Transient Noise Injection: 鋭角スパイク ＋ 破砕バースト)
+          2. 非線形 Waveshaper / ディストーション (衝突エッジ・倍音強調)
+          3. Decay Cutoff Gate (不要な余韻を急峻にカットして圧倒的なキレを付与)
+          4. Sub-Kick 自動判別 (40-80Hz 重打撃の超重低音衝撃波パンチ)
         """
         audio = stage2_output.audio.copy()
         N = len(audio)
         sr = self.sr
 
         # パラメータ取得
-        noise_gain = float(physical_profile.get("transient_noise_gain", 0.40))
-        cutoff_gate_ms = float(physical_profile.get("decay_cutoff_gate_ms", 70.0))
-        drive = float(physical_profile.get("waveshaper_drive", 2.0))
+        noise_gain = float(physical_profile.get("transient_noise_gain", 0.70))
+        cutoff_gate_ms = float(physical_profile.get("decay_cutoff_gate_ms", 60.0))
+        drive = float(physical_profile.get("waveshaper_drive", 3.0))
         has_sub_kick = bool(physical_profile.get("has_sub_kick", False))
 
         # ---------------------------------------------------------------------
-        # 1. 過渡ノイズ重畳 (Transient Noise Injection: 最初の 0.5〜4ms)
+        # 1. 過渡ノイズ重畳 (Transient Noise Injection: 0.5〜8ms ガッツリ注入)
         # ---------------------------------------------------------------------
-        noise_dur_ms = min(4.0, max(0.8, physical_profile.get("attack_time_ms", 2.0) * 1.5))
-        n_noise = int(noise_dur_ms * 0.001 * sr)
-        if n_noise > 0 and n_noise <= N:
-            # Hertz接触インパルス・スパイク + ホワイトノイズ
-            t_spk = np.linspace(0, 1, n_noise)
-            spike = np.sin(np.pi * t_spk) * np.exp(-t_spk * 3.5)
-            # 高域気流ノイズ (ホワイトノイズ + 微弱ハイパス)
+        eff_noise_gain = noise_gain * noise_boost * effect_intensity
+        # 1-1. 超短時間 Hertz 接触スパイク (0.5〜2.5ms)
+        n_spike = max(16, int(0.0025 * sr))
+        if n_spike <= N:
+            t_spk = np.linspace(0, 1, n_spike)
+            spike = (np.sin(2.0 * np.pi * t_spk) * np.exp(-t_spk * 4.5)).astype(np.float32)
+            audio[:n_spike] += spike * (eff_noise_gain * 0.90)
+
+        # 1-2. 接触破砕バースト・気流摩擦 (2〜10ms)
+        n_burst = max(32, int(0.009 * sr))
+        if n_burst <= N:
             rng = np.random.default_rng(42)
-            noise_comp = rng.normal(0, 1, n_noise).astype(np.float32)
-            noise_comp = noise_comp - 0.7 * np.roll(noise_comp, 1)
-
-            transient_layer = (0.7 * spike + 0.3 * noise_comp).astype(np.float32)
-            audio[:n_noise] += transient_layer * noise_gain
-
-        # ---------------------------------------------------------------------
-        # 2. Waveshaper / Soft Clipper (非線形歪みによる衝突エッジ強調)
-        # ---------------------------------------------------------------------
-        # tanh 飽和クリッパー
-        audio = np.tanh(drive * audio) / np.tanh(drive)
+            burst_raw = rng.normal(0, 1, n_burst).astype(np.float32)
+            # ハイパス差分 + 指数ディケイ
+            burst_crack = (burst_raw - 0.75 * np.roll(burst_raw, 1)) * np.exp(-np.linspace(0, 4.0, n_burst)).astype(np.float32)
+            audio[:n_burst] += burst_crack * (eff_noise_gain * 0.75)
 
         # ---------------------------------------------------------------------
-        # 3. Decay Cutoff Gate (急峻な余韻切断・キレの付加)
+        # 2. Waveshaper / 非線形ディストーション (衝突の硬質エッジ・倍音強調)
         # ---------------------------------------------------------------------
-        gate_samples = int(cutoff_gate_ms * 0.001 * sr)
+        total_drive = drive * drive_boost * effect_intensity
+        w_in = total_drive * audio
+        # 非対称サチュレーション (偶数倍音と奇数倍音を豊かに発生させ、バキッとした打撃感を付与)
+        w_sat = np.where(w_in >= 0, np.tanh(w_in * 1.3), np.tanh(w_in * 0.85) * 1.15)
+        # ハードピーク微小クリップ
+        w_clipped = np.clip(w_sat, -1.35, 1.35)
+        peak_w = np.max(np.abs(w_clipped))
+        if peak_w > 1e-4:
+            audio = (w_clipped / peak_w).astype(np.float32)
+
+        # ---------------------------------------------------------------------
+        # 3. Decay Cutoff Gate (不要な余韻を急峻に切断し、キレを極限化)
+        # ---------------------------------------------------------------------
+        # gate_tightness が高いほど、余韻を早め・急峻に切断
+        eff_gate_ms = max(24.0, cutoff_gate_ms / max(0.4, gate_tightness))
+        gate_samples = int(eff_gate_ms * 0.001 * sr)
         if gate_samples < N:
-            # ゲート到達点から 12ms で急峻にゼロへフェードアウト
-            fade_cut = min(int(0.012 * sr), N - gate_samples)
+            # 4.5ms の超急峻カットフェード
+            fade_cut = min(int(0.0045 * sr), N - gate_samples)
             if fade_cut > 0:
                 cut_curve = 0.5 * (1.0 + np.cos(np.pi * np.linspace(0, 1, fade_cut)))
                 audio[gate_samples : gate_samples + fade_cut] *= cut_curve.astype(np.float32)
@@ -545,28 +562,31 @@ class OnomatopoeiaPipelineSynthesizer:
                 audio[gate_samples + fade_cut :] = 0.0
 
         # ---------------------------------------------------------------------
-        # 4. Sub-Kick 自動判別 (重打撃成分 40-80Hz のブレンド)
+        # 4. Sub-Kick 自動判別 (40-80Hz 重低音衝撃波パンチ)
         # ---------------------------------------------------------------------
         sub_kick_applied = False
         if has_sub_kick:
-            sub_dur_ms = 140.0
+            sub_dur_ms = 180.0
             n_sub = min(N, int(sub_dur_ms * 0.001 * sr))
             t_sub = np.linspace(0, sub_dur_ms * 0.001, n_sub, endpoint=False)
-            f_start = float(physical_profile.get("sub_kick_f0", 75.0)) * 2.2
-            f_end = float(physical_profile.get("sub_kick_f0", 75.0)) * 0.6
-            # ピッチベンド・サイン波
-            freq_curve = f_start + (f_end - f_start) * (1.0 - np.exp(-t_sub / 0.035))
+            f_start = float(physical_profile.get("sub_kick_f0", 68.0)) * 2.8
+            f_end = float(physical_profile.get("sub_kick_f0", 68.0)) * 0.45
+            # ピッチベンド・サイン波 + サチュレーション倍音
+            freq_curve = f_start + (f_end - f_start) * (1.0 - np.exp(-t_sub / 0.028))
             phase = 2.0 * np.pi * np.cumsum(freq_curve / sr)
-            sub_env = np.exp(-t_sub / 0.045).astype(np.float32)
-            sub_wave = (np.sin(phase) * sub_env * float(physical_profile.get("sub_kick_gain", 0.75))).astype(np.float32)
+            sub_raw = np.sin(phase) + 0.35 * np.sin(2.0 * phase)
+            sub_sat = np.tanh(1.8 * sub_raw)
+            sub_env = np.exp(-t_sub / 0.055).astype(np.float32)
+            sub_gain = float(physical_profile.get("sub_kick_gain", 1.35)) * sub_boost * effect_intensity
+            sub_wave = (sub_sat * sub_env * sub_gain).astype(np.float32)
 
             audio[:n_sub] += sub_wave
             sub_kick_applied = True
 
-        # 最終ピーク正規化 (ヘッドルーム 0.92)
+        # 最終ピーク正規化 (ヘッドルーム 0.94)
         peak = np.max(np.abs(audio))
         if peak > 1e-4:
-            audio = audio * (0.92 / peak)
+            audio = audio * (0.94 / peak)
 
         rms = float(np.sqrt(np.mean(audio ** 2)))
         cf_db = float(20.0 * np.log10(max(1.0, np.max(np.abs(audio)) / (rms + 1e-9))))
@@ -574,14 +594,15 @@ class OnomatopoeiaPipelineSynthesizer:
         return StageOutput(
             stage_id=3,
             stage_name="Stage 3: 物理エフェクター仕上げ (Physical Finishing)",
-            description=f"過渡ノイズ重畳（{noise_dur_ms:.1f}ms）、Decay Cutoff Gate（余韻切断: {cutoff_gate_ms}ms）、Waveshaper（歪み x{drive:.1f}）を適用。{'Sub-Kick (重低音衝撃波) 付加。' if sub_kick_applied else 'Sub-Kick OFF（非重打撃）。'}",
+            description=f"過渡ノイズ重畳（ゲイン x{eff_noise_gain:.2f}）、Waveshaper歪み（Drive x{total_drive:.1f}）、Decay Cutoff Gate（余韻切断: {eff_gate_ms:.0f}ms）。{'Sub-Kick (重低音衝撃波パンチ) 付加。' if sub_kick_applied else 'Sub-Kick OFF（非重打撃）。'}",
             audio=audio.astype(np.float32),
             sample_rate=self.sr,
             metrics={
                 "duration_ms": round(len(audio) / self.sr * 1000.0, 1),
                 "crest_factor_db": round(cf_db, 2),
-                "cutoff_gate_ms": cutoff_gate_ms,
-                "drive": drive,
+                "cutoff_gate_ms": round(eff_gate_ms, 1),
+                "total_drive": round(total_drive, 1),
+                "noise_gain": round(eff_noise_gain, 2),
                 "sub_kick": sub_kick_applied,
             },
         )
@@ -594,6 +615,11 @@ class OnomatopoeiaPipelineSynthesizer:
         word: str,
         physical_source: Union[str, Dict[str, Any], np.ndarray],
         f0: float = 140.0,
+        effect_intensity: float = 1.6,
+        noise_boost: float = 1.4,
+        drive_boost: float = 1.5,
+        gate_tightness: float = 1.4,
+        sub_boost: float = 1.5,
     ) -> PipelineResult:
         """
         オノマトペ文字列と物理音ソース（プリセットキー / プロファイル辞書 / WAV波形）を受け取り、
@@ -612,12 +638,12 @@ class OnomatopoeiaPipelineSynthesizer:
                 "category": "analyzed_wav",
                 "attack_time_ms": features.attack_time_ms,
                 "decay_time_ms": features.decay_time_ms,
-                "jerk_slope": float(np.clip(features.attack_slope / 300.0, 0.8, 3.0)),
-                "waveshaper_drive": float(np.clip(features.crest_factor_db / 8.0, 1.2, 4.0)),
-                "transient_noise_gain": float(np.clip(features.high_freq_ratio * 0.8, 0.2, 0.7)),
-                "decay_cutoff_gate_ms": float(np.clip(features.decay_time_ms * 1.2, 45.0, 250.0)),
+                "jerk_slope": float(np.clip(features.attack_slope / 250.0, 1.0, 3.5)),
+                "waveshaper_drive": float(np.clip(features.crest_factor_db / 6.0, 1.8, 5.0)),
+                "transient_noise_gain": float(np.clip(features.high_freq_ratio * 1.2, 0.4, 1.2)),
+                "decay_cutoff_gate_ms": float(np.clip(features.decay_time_ms * 0.9, 35.0, 220.0)),
                 "has_sub_kick": bool(features.transient_low_freq_ratio > 0.15),
-                "sub_kick_gain": 0.80,
+                "sub_kick_gain": 1.20,
                 "sub_kick_f0": 70.0,
             }
         else:
@@ -627,7 +653,15 @@ class OnomatopoeiaPipelineSynthesizer:
         tokens = self.parse_onomatopoeia(word)
         st1 = self.stage1_linguistic_foundation(word, f0=f0)
         st2 = self.stage2_tempo_adsr_adaptation(st1, profile)
-        st3 = self.stage3_physical_effects_finishing(st2, profile)
+        st3 = self.stage3_physical_effects_finishing(
+            st2,
+            profile,
+            effect_intensity=effect_intensity,
+            noise_boost=noise_boost,
+            drive_boost=drive_boost,
+            gate_tightness=gate_tightness,
+            sub_boost=sub_boost,
+        )
 
         return PipelineResult(
             word=word,
