@@ -348,3 +348,25 @@ class Onomatopoeia2DSpaceEngine:
         if peak > 1e-4:
             mixed = mixed * (0.94 / peak)
         return mixed.astype(np.float32)
+
+    def generate_anchor_audio_dict(self, effect_intensity: float = 1.8) -> Dict[str, str]:
+        """
+        全アンカー単語の完成音声 (Stage 3 ガッツリ仕上げ) を事前合成し、
+        Base64 WAV 文字列の辞書マップとして返却。
+        """
+        import io
+        import base64
+        import scipy.io.wavfile as wavfile
+
+        audio_map = {}
+        for anc in self.anchors:
+            res = self.synthesize_at_point(anc.x, anc.y, effect_intensity=effect_intensity)
+            audio = res.stage3.audio
+            clamped = np.clip(audio, -1.0, 1.0)
+            int16_data = (clamped * 32767.0).astype(np.int16)
+            buf = io.BytesIO()
+            wavfile.write(buf, self.sr, int16_data)
+            b64_str = base64.b64encode(buf.getvalue()).decode("ascii")
+            audio_map[anc.word] = b64_str
+        return audio_map
+

@@ -57,15 +57,19 @@ def build_xy_pad_component(
     cur_x: float,
     cur_y: float,
     cur_word: str,
-    audio_base64: str,
+    anchor_audios: Dict[str, str],
     anchors_data: List[Dict[str, Any]],
     repeat_bpm: int = 120,
     is_playing: bool = True,
 ) -> str:
     """
-    インタラクティブHTML5 Canvas XYパッド ＆ Web Audio リピートプレイヤーコンポーネント
+    インタラクティブHTML5 Canvas XYパッド ＆ Web Audio リアルタイム音色制御コンポーネント.
+    全アンカー単語のオーディオバッファをブラウザ側にプリロードし、
+    クリック・ドラッグ時に最寄り単語のバッファへ即座に切り替えつつ、
+    横軸（湿度・LPFフィルター）と縦軸（粒度・ピッチ/playbackRate）をリアルタイム適用します。
     """
     anchors_json = json.dumps(anchors_data, ensure_ascii=False)
+    anchor_audios_json = json.dumps(anchor_audios, ensure_ascii=False)
 
     html_code = f"""
     <!DOCTYPE html>
@@ -99,6 +103,8 @@ def build_xy_pad_component(
         padding: 10px 18px;
         background: #0f172a;
         border-bottom: 1px solid #1e293b;
+        flex-wrap: wrap;
+        gap: 8px;
       }}
       .pad-title {{
         font-size: 0.95rem;
@@ -111,15 +117,24 @@ def build_xy_pad_component(
       .status-pill {{
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         background: #1e293b;
-        padding: 4px 12px;
+        padding: 5px 14px;
         border-radius: 20px;
         font-size: 0.85rem;
         color: #94a3b8;
       }}
       .status-pill b {{
         color: #4ade80;
+        font-size: 1.05rem;
+      }}
+      .dsp-badge {{
+        background: #0b1329;
+        border: 1px solid #334155;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        color: #38bdf8;
       }}
       canvas {{
         display: block;
@@ -135,6 +150,8 @@ def build_xy_pad_component(
         border-top: 1px solid #1e293b;
         font-size: 0.85rem;
         color: #94a3b8;
+        flex-wrap: wrap;
+        gap: 10px;
       }}
       .btn-play {{
         background: linear-gradient(135deg, #0ea5e9, #0284c7);
@@ -156,6 +173,53 @@ def build_xy_pad_component(
       .btn-stop {{
         background: #ef4444 !important;
       }}
+      .vol-control {{
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82rem;
+      }}
+      .vol-btn {{
+        background: #1e293b;
+        color: #94a3b8;
+        border: 1px solid #334155;
+        border-radius: 4px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font-size: 0.78rem;
+        font-weight: 600;
+        transition: all 0.15s;
+      }}
+      .vol-btn.active {{
+        background: #38bdf8;
+        color: #090e1a;
+        border-color: #38bdf8;
+      }}
+      .quick-bar {{
+        padding: 8px 16px;
+        background: #090e1a;
+        border-top: 1px solid #1e293b;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }}
+      .quick-chip {{
+        background: #151f33;
+        color: #cbd5e1;
+        border: 1px solid #283548;
+        padding: 3px 9px;
+        border-radius: 14px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }}
+      .quick-chip:hover {{
+        background: #1e293b;
+        border-color: #38bdf8;
+        color: #38bdf8;
+        transform: translateY(-1px);
+      }}
     </style>
     </head>
     <body>
@@ -166,23 +230,37 @@ def build_xy_pad_component(
           <span>🎯 2D オノマトペ・テクスチャ空間 パッド</span>
         </div>
         <div class="status-pill">
-          現在地点: <b id="lbl-current-word">{cur_word}</b>
+          現在オノマトペ: <b id="lbl-current-word">{cur_word}</b>
           <span style="color: #64748b;">(X: <span id="lbl-pos-x">{cur_x:+.2f}</span>, Y: <span id="lbl-pos-y">{cur_y:+.2f}</span>)</span>
+          <span class="dsp-badge">LPF: <span id="lbl-filter-freq">12000Hz</span></span>
+          <span class="dsp-badge">ピッチ: <span id="lbl-pitch-rate">x1.00</span></span>
         </div>
       </div>
 
-      <canvas id="padCanvas" width="780" height="520"></canvas>
+      <canvas id="padCanvas" width="780" height="490"></canvas>
+
+      <!-- クイック選択チップバー -->
+      <div class="quick-bar">
+        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600; margin-right: 4px;">⚡ クイック試聴:</span>
+        <div id="quickChipsContainer" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+      </div>
 
       <div class="controls-bar">
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
           <button id="btnPlayRepeat" class="btn-play">
             <span id="btnIcon">🔄</span>
             <span id="btnText">リピート再生中</span>
           </button>
-          <span>テンポ (BPM): <b style="color: #38bdf8;">{repeat_bpm}</b> (約{int(60000 / repeat_bpm)}ms周期)</span>
+          <span>テンポ: <b style="color: #38bdf8;">{repeat_bpm} BPM</b> (約{int(60000 / repeat_bpm)}ms周期)</span>
         </div>
-        <div style="font-size: 0.80rem; color: #64748b;">
-          💡 パッド上をクリックまたはドラッグすると、その質感で音が心地よく反復発音されます
+        
+        <div class="vol-control">
+          <span>🔊 音量:</span>
+          <button class="vol-btn" data-vol="0.2">20%</button>
+          <button class="vol-btn" data-vol="0.4">40%</button>
+          <button class="vol-btn" data-vol="0.6">60%</button>
+          <button class="vol-btn active" data-vol="0.8">80%</button>
+          <button class="vol-btn" data-vol="1.0">100%</button>
         </div>
       </div>
     </div>
@@ -196,6 +274,8 @@ def build_xy_pad_component(
       const CY = H / 2;
 
       const anchors = {anchors_json};
+      const anchorAudiosRaw = {anchor_audios_json};
+
       let curX = {cur_x};
       let curY = {cur_y};
       let curWord = "{cur_word}";
@@ -203,25 +283,35 @@ def build_xy_pad_component(
       let repeatBpm = {repeat_bpm};
       let pulseRing = 0;
       let isDragging = false;
+      let currentVolume = 0.8;
 
-      // Web Audio API によるリピート発音管理
+      // Web Audio API によるマルチバッファ ＆ リアルタイムDSP管理
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffers = {{}};
       let currentAudioBuffer = null;
       let repeatTimer = null;
+      let loadedBuffersCount = 0;
 
-      // 初期のBase64音声をデコード
-      const initialB64 = "{audio_base64}";
-      if (initialB64) {{
-        fetch("data:audio/wav;base64," + initialB64)
+      // 全アンカー音声をデコードしてバッファキャッシュに格納
+      const totalAnchors = Object.keys(anchorAudiosRaw).length;
+      for (const [word, b64] of Object.entries(anchorAudiosRaw)) {{
+        fetch("data:audio/wav;base64," + b64)
           .then(res => res.arrayBuffer())
           .then(ab => audioCtx.decodeAudioData(ab))
           .then(buf => {{
-            currentAudioBuffer = buf;
-            startRepeatLoop();
+            audioBuffers[word] = buf;
+            loadedBuffersCount++;
+            if (word === curWord || (!currentAudioBuffer && loadedBuffersCount === 1)) {{
+              currentAudioBuffer = buf;
+            }}
+            if (loadedBuffersCount === 1 && !repeatTimer) {{
+              startRepeatLoop();
+            }}
           }})
-          .catch(e => console.error("Audio decode error:", e));
+          .catch(e => console.error("Decode error for", word, e));
       }}
 
+      // 発音処理 (リアルタイムDSP: playbackRate ✕ BiquadFilter ✕ Gain)
       function playSoundOnce() {{
         if (!currentAudioBuffer || !isPlaying) return;
         try {{
@@ -230,9 +320,63 @@ def build_xy_pad_component(
           }}
           const src = audioCtx.createBufferSource();
           src.buffer = currentAudioBuffer;
-          src.connect(audioCtx.destination);
+
+          // 1. 縦軸 Y (粒度): ピッチ・再生速度制御
+          // Y = +1 (微細・サラサラ): x1.20 (キメ細かくシャープ)
+          // Y =  0 (中立): x1.00
+          // Y = -1 (粗大・ガタガタ/ドカン): x0.80 (太く重くドスが利く)
+          const rate = 1.0 + curY * 0.20;
+          src.playbackRate.value = Math.max(0.68, Math.min(1.38, rate));
+
+          // 2. 横軸 X (湿度): 動的フィルター (別のAIのHPF/LPF＋共鳴Q値設計を統合)
+          const filter = audioCtx.createBiquadFilter();
+          const now = audioCtx.currentTime;
+          if (curX < -0.15) {{
+            // 左側 (乾いた・ぱさぱさ領域): ハイパスで低音の濁りを削ぎ落とし、カサカサした乾燥擦過音を強調
+            filter.type = "highpass";
+            const hpCutoff = 400.0 + (-curX) * 1600.0; // 400Hz ~ 2000Hz HPF
+            filter.frequency.setValueAtTime(hpCutoff, now);
+            filter.Q.setValueAtTime(1.2, now);
+          }} else {{
+            // 右側 (湿潤・びちゃびちゃ領域): ローパスで高域を落とし、Q値で水分の共鳴ピークを付加
+            filter.type = "lowpass";
+            const lpCutoff = 2200.0 * Math.pow(9000.0 / 2200.0, Math.max(0, 1.0 - curX));
+            filter.frequency.setValueAtTime(Math.max(1200.0, Math.min(18000.0, lpCutoff)), now);
+            const resQ = 1.0 + Math.max(0, curX) * 4.5; // 水分共鳴Q値 (最大5.5)
+            filter.Q.setValueAtTime(resQ, now);
+          }}
+
+          // 3. 重底打撃 Sub-Kick オシレーター動的重畳 (別のAIのアイデア統合)
+          // Y < -0.25 (粗大・ガタガタ/ドカン/ゴロゴロ領域) で本物の重低音サイン波キックを発振
+          if (curY < -0.25) {{
+            const osc = audioCtx.createOscillator();
+            const kickGain = audioCtx.createGain();
+            osc.type = "sine";
+            const startF0 = 65.0 - curY * 25.0; // 70Hz ~ 90Hz
+            osc.frequency.setValueAtTime(startF0, now);
+            osc.frequency.exponentialRampToValueAtTime(28.0, now + 0.10); // 地鳴り28Hzへ急降下
+
+            const kickVol = Math.min(1.0, (-curY - 0.25) * 1.6 * currentVolume);
+            kickGain.gain.setValueAtTime(kickVol, now);
+            kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+            osc.connect(kickGain);
+            kickGain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.12);
+          }}
+
+          // 4. 5段階 マスター音量 GainNode
+          const gainNode = audioCtx.createGain();
+          gainNode.gain.setValueAtTime(currentVolume, now);
+
+          // ノード接続: Source -> LPF/HPF Filter -> Gain -> Destination
+          src.connect(filter);
+          filter.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+
           src.start(0);
-          pulseRing = 1.0; // 発音パルス
+          pulseRing = 1.0; // 発音パルス描画
         }} catch(e) {{
           console.warn("Audio play error:", e);
         }}
@@ -250,7 +394,6 @@ def build_xy_pad_component(
       }}
 
       // 座標系変換: [-1, 1] <-> Canvas [px]
-      // padding 45px
       const PAD_MARGIN = 45;
       const PLOT_W = (W - PAD_MARGIN * 2) / 2;
       const PLOT_H = (H - PAD_MARGIN * 2) / 2;
@@ -258,7 +401,7 @@ def build_xy_pad_component(
       function toScreen(x, y) {{
         return {{
           sx: CX + x * PLOT_W,
-          sy: CY - y * PLOT_H // Yは上がプラス
+          sy: CY - y * PLOT_H
         }};
       }}
 
@@ -267,6 +410,87 @@ def build_xy_pad_component(
           x: Math.max(-1.0, Math.min(1.0, (sx - CX) / PLOT_W)),
           y: Math.max(-1.0, Math.min(1.0, (CY - sy) / PLOT_H))
         }};
+      }}
+
+      // 最寄りアンカー単語を検索
+      function findNearestAnchor(x, y) {{
+        let bestDist = 999;
+        let best = anchors[0];
+        for (let anc of anchors) {{
+          const d = Math.hypot(x - anc.x, y - anc.y);
+          if (d < bestDist) {{
+            bestDist = d;
+            best = anc;
+          }}
+        }}
+        return best;
+      }}
+
+      // UIステータス表示の更新
+      function updateStatusDisplay() {{
+        document.getElementById("lbl-current-word").innerText = curWord;
+        document.getElementById("lbl-pos-x").innerText = (curX >= 0 ? "+" : "") + curX.toFixed(2);
+        document.getElementById("lbl-pos-y").innerText = (curY >= 0 ? "+" : "") + curY.toFixed(2);
+
+        const cutoff = Math.round(2000.0 * Math.pow(18000.0 / 2000.0, (1.0 - curX) / 2.0));
+        const rate = (1.0 + curY * 0.18).toFixed(2);
+        const lpfEl = document.getElementById("lbl-filter-freq");
+        if (lpfEl) lpfEl.innerText = cutoff + "Hz";
+        const pitchEl = document.getElementById("lbl-pitch-rate");
+        if (pitchEl) pitchEl.innerText = "x" + rate;
+      }}
+
+      // ポインター操作 (クリック・ドラッグ) による即時バッファ切り替え ＆ 再生
+      function handlePointerAction(e) {{
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        if (!clientX || !clientY) return;
+
+        const sx = (clientX - rect.left) * (canvas.width / rect.width);
+        const sy = (clientY - rect.top) * (canvas.height / rect.height);
+
+        const pos = fromScreen(sx, sy);
+        curX = pos.x;
+        curY = pos.y;
+
+        const nearest = findNearestAnchor(curX, curY);
+        curWord = nearest.word;
+
+        // ★ 音声バッファの即時切り替え！
+        if (audioBuffers[curWord]) {{
+          currentAudioBuffer = audioBuffers[curWord];
+        }}
+
+        updateStatusDisplay();
+        playSoundOnce();
+      }}
+
+      // クイック選択チップクリック時のジャンプ
+      function jumpToAnchor(anc) {{
+        curX = anc.x;
+        curY = anc.y;
+        curWord = anc.word;
+        if (audioBuffers[anc.word]) {{
+          currentAudioBuffer = audioBuffers[anc.word];
+        }}
+        updateStatusDisplay();
+        playSoundOnce();
+      }}
+
+      // クイック選択チップボタンの動的生成
+      const chipsContainer = document.getElementById("quickChipsContainer");
+      const priorityWords = ["サラサラ", "カサカサ", "ぱさぱさ", "ガタガタ", "びちゃびちゃ", "ぐちゃぐちゃ", "トントン", "カツン", "ドカン", "サクサク"];
+      for (let anc of anchors) {{
+        if (priorityWords.includes(anc.word)) {{
+          const chip = document.createElement("button");
+          chip.className = "quick-chip";
+          chip.innerText = anc.word;
+          chip.title = anc.description;
+          chip.style.borderLeft = `3px solid ${{anc.color}}`;
+          chip.addEventListener("click", () => jumpToAnchor(anc));
+          chipsContainer.appendChild(chip);
+        }}
       }}
 
       // 描画ループ
@@ -306,21 +530,21 @@ def build_xy_pad_component(
 
         // 上: 細かい
         ctx.fillStyle = "#38bdf8";
-        ctx.fillText("🔺 上: 細かい・微細 (サラサラ / カサカサ)", CX, 22);
+        ctx.fillText("🔺 上: 細かい・微細 (サラサラ / カサカサ)", CX, 20);
 
         // 下: 粗い
         ctx.fillStyle = "#f97316";
-        ctx.fillText("🔻 下: 粗い・打撃衝撃 (ガタガタ / ドカン)", CX, H - 22);
+        ctx.fillText("🔻 下: 粗い・打撃衝撃 (ガタガタ / ドカン)", CX, H - 20);
 
         // 左: 乾いた
         ctx.fillStyle = "#c084fc";
         ctx.textAlign = "left";
-        ctx.fillText("🌵 左: 乾いた・乾燥 (ぱさぱさ)", 18, CY - 12);
+        ctx.fillText("🌵 左: 乾いた (ぱさぱさ)", 16, CY - 12);
 
         // 右: 湿潤
         ctx.fillStyle = "#38bdf8";
         ctx.textAlign = "right";
-        ctx.fillText("💧 右: 水分量大・湿潤 (びちゃびちゃ)", W - 18, CY - 12);
+        ctx.fillText("💧 右: 水分量大 (びちゃびちゃ)", W - 16, CY - 12);
 
         // 中心 (0, 0)
         ctx.fillStyle = "#64748b";
@@ -346,7 +570,7 @@ def build_xy_pad_component(
           ctx.textAlign = "center";
           const tw = ctx.measureText(anc.word).width + 12;
           
-          ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+          ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
           ctx.fillRect(pos.sx - tw / 2, pos.sy + 8, tw, 20);
           ctx.strokeStyle = anc.color;
           ctx.lineWidth = 1;
@@ -362,30 +586,30 @@ def build_xy_pad_component(
         // パルス波紋リング
         if (pulseRing > 0.05) {{
           ctx.beginPath();
-          ctx.arc(curPos.sx, curPos.sy, 25 * (2.0 - pulseRing), 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(74, 222, 128, ${{pulseRing * 0.8}})`;
+          ctx.arc(curPos.sx, curPos.sy, 26 * (2.0 - pulseRing), 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(74, 222, 128, ${{pulseRing * 0.85}})`;
           ctx.lineWidth = 2.5;
           ctx.stroke();
-          pulseRing *= 0.92;
+          pulseRing *= 0.91;
         }}
 
         // 十字照準
         ctx.strokeStyle = "#4ade80";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(curPos.sx, curPos.sy, 9, 0, Math.PI * 2);
+        ctx.arc(curPos.sx, curPos.sy, 10, 0, Math.PI * 2);
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.moveTo(curPos.sx - 14, curPos.sy); ctx.lineTo(curPos.sx + 14, curPos.sy);
-        ctx.moveTo(curPos.sx, curPos.sy - 14); ctx.lineTo(curPos.sx, curPos.sy + 14);
+        ctx.moveTo(curPos.sx - 15, curPos.sy); ctx.lineTo(curPos.sx + 15, curPos.sy);
+        ctx.moveTo(curPos.sx, curPos.sy - 15); ctx.lineTo(curPos.sx, curPos.sy + 15);
         ctx.stroke();
 
         // 現在単語フローティングタグ
         ctx.font = "bold 13px sans-serif";
         ctx.textAlign = "center";
         const curTw = ctx.measureText(curWord).width + 18;
-        ctx.fillStyle = "rgba(74, 222, 128, 0.25)";
+        ctx.fillStyle = "rgba(74, 222, 128, 0.28)";
         ctx.fillRect(curPos.sx - curTw / 2, curPos.sy - 34, curTw, 22);
         ctx.strokeStyle = "#4ade80";
         ctx.strokeRect(curPos.sx - curTw / 2, curPos.sy - 34, curTw, 22);
@@ -396,48 +620,7 @@ def build_xy_pad_component(
         requestAnimationFrame(draw);
       }}
 
-      // クリック ＆ ドラッグ インタラクション
-      function handlePointerAction(e) {{
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-        if (!clientX || !clientY) return;
-
-        const sx = (clientX - rect.left) * (canvas.width / rect.width);
-        const sy = (clientY - rect.top) * (canvas.height / rect.height);
-
-        const pos = fromScreen(sx, sy);
-        curX = pos.x;
-        curY = pos.y;
-
-        // 最寄りの単語をフロント側でも簡易判定
-        let bestDist = 999;
-        let bestWord = curWord;
-        for (let anc of anchors) {{
-          const d = Math.hypot(curX - anc.x, curY - anc.y);
-          if (d < bestDist) {{
-            bestDist = d;
-            bestWord = anc.word;
-          }}
-        }}
-        curWord = bestWord;
-        document.getElementById("lbl-current-word").innerText = curWord;
-        document.getElementById("lbl-pos-x").innerText = (curX >= 0 ? "+" : "") + curX.toFixed(2);
-        document.getElementById("lbl-pos-y").innerText = (curY >= 0 ? "+" : "") + curY.toFixed(2);
-
-        // 即時リピート発音
-        pulseRing = 1.0;
-        playSoundOnce();
-
-        // Streamlit へ座標通知 (親ウィンドウのクエリパラメータやイベント更新)
-        try {{
-          window.parent.postMessage({{
-            type: "streamlit:setComponentValue",
-            value: {{ x: curX, y: curY, word: curWord, time: Date.now() }}
-          }}, "*");
-        }} catch(e) {{}}
-      }}
-
+      // マウスイベント
       canvas.addEventListener("mousedown", (e) => {{
         isDragging = true;
         handlePointerAction(e);
@@ -453,7 +636,7 @@ def build_xy_pad_component(
         isDragging = false;
       }});
 
-      // タッチ対応
+      // タッチイベント
       canvas.addEventListener("touchstart", (e) => {{
         isDragging = true;
         handlePointerAction(e);
@@ -487,7 +670,19 @@ def build_xy_pad_component(
         }}
       }});
 
-      // 描画開始
+      // 5段階 音量ボタンイベント
+      document.querySelectorAll(".vol-btn").forEach(btn => {{
+        btn.addEventListener("click", (e) => {{
+          document.querySelectorAll(".vol-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          currentVolume = parseFloat(btn.getAttribute("data-vol"));
+        }});
+      }});
+
+      // 初期ステータス表示更新
+      updateStatusDisplay();
+
+      // 描画ループ開始
       requestAnimationFrame(draw);
     </script>
     </body>
@@ -621,6 +816,13 @@ def main():
             "description": anc.description,
         })
 
+    # 全アンカー音声の生成 (キャッシュにより瞬時に取得可能)
+    @st.cache_data(show_spinner=False)
+    def _load_all_anchor_audios(eff_intensity: float) -> Dict[str, str]:
+        return engine.generate_anchor_audio_dict(effect_intensity=eff_intensity)
+
+    anchor_audios_map = _load_all_anchor_audios(st.session_state["effect_intensity"])
+
     # -------------------------------------------------------------------------
     # 【メイン表示部】インタラクティブXYパッド
     # -------------------------------------------------------------------------
@@ -632,12 +834,12 @@ def main():
             cur_x=cur_x,
             cur_y=cur_y,
             cur_word=display_word,
-            audio_base64=s3_b64,
+            anchor_audios=anchor_audios_map,
             anchors_data=anchors_list,
             repeat_bpm=st.session_state["repeat_bpm"],
             is_playing=True,
         )
-        components.html(pad_html, height=620, scrolling=False)
+        components.html(pad_html, height=670, scrolling=False)
 
     with info_col:
         st.markdown("### 📋 現在の地点・物理補間情報")
