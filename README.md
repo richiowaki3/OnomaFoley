@@ -1,129 +1,89 @@
-# OnomaFoley
+# 🌌 OnomaFoley (多次元オノマトペ・シンセサイザー) 現状ステータス報告書
 
-**声モデル（Vocal Tract Formants）× 物理衝撃モデル（Physical Impact Modal Resonators）のハイブリッド交差点合成 ＆ TTS音響解析パイプライン**
-
----
-
-## 概要
-
-`OnomaFoley` は、オノマトペ・擬音語・擬態語を対象として、**「人間の発声モデル（声帯振動・声道フォルマント）」** と **「物理世界の衝突・摩擦・流体モデル（剛性・減衰・重低音過渡衝撃・モーダル共鳴）」** をミリ秒単位で交差（クロスモーダル合成）させ、プロシージャルに物理効果音（Foley SFX）を自動生成・解析する音響工学プラットフォームです。
-
-多言語オノマトペ多次元ベクトル辞書 [OnomaDict](https://github.com/richiowaki3/OnomaDict)（JP: 2,061語 / KR: 5,050語 / AF: 245語）の音響バックエンドとして機能し、TTS（音声合成）音声からの物理・音響特徴量自動抽出、ならびに外部WAVに依存しない数学的・物理的DSP合成エンジンを提供します。
+**作成日時**: 2026年10月10日  
+**プロジェクト**: `richiowaki3/Project-KineticChain` / `richiowaki3/OnomaFoley`  
+**対応ファイル**:
+* [d:/Antigravity_Work/MotionAnalysis/index.html](file:///d:/Antigravity_Work/MotionAnalysis/index.html) (スタンドアロンWebアプリ本体)
+* [d:/Antigravity_Work/OnomaFoley/index.html](file:///d:/Antigravity_Work/OnomaFoley/index.html) (GitHub Pages公開用)
+* [d:/Antigravity_Work/MotionAnalysis/app_onomato_matrices_v2.py](file:///d:/Antigravity_Work/MotionAnalysis/app_onomato_matrices_v2.py) (Streamlit統合版)
 
 ---
 
-## 主要コンポーネント
+## 1. プロジェクト概要
 
-### 1. デュアル・エンジン・ハイブリッド交差点シンセサイザー (`modular_dsp`)
-従来の音声合成（人間の声に偏る）やサンプラー（物理打撃に偏る）の限界を突破するため、2つのエンジンを音素構造に応じて動的にルーティング・モーフィングします。
+本システムは、人間の認知・感性・運動科学に基づく **6つの学術的オノマトペ多次元モデル** を統合し、ブラウザ上で直感的なマウス操作（XYパッド／3面直交パッド）によりリアルタイムにオノマトペ・フォーリー音（効果音）を合成・演奏・ループできる次世代Webオーディオ・シンセサイザーです。
 
-```
-                ┌─── [Engine A: 人間の声モデル] ──────┐
-                │   Glottal Pulse Source              │
-                │   + Vocal Tract Formants (F1, F2)   │
-[入力オノマトペ] ─┤                                     ├─► [モーフィング] ─► [合成音]
-                │                                     │     (Vocalness)
-                └─── [Engine B: 物理衝撃モデル] ──────┘
-                    Shockwave Transient (Sub-Kick)
-                    + Modal Resonators (Wood/Metal/Glass)
-                    + Vocal Tract Bypass
-```
-
-- **Pattern A (重打撃・爆発音 / 例: ドカン, ズシン)**: 声道をバイパスし、Sub-Kick（超低域衝撃波 40-80Hz）＋過渡スパイク＋モーダル共鳴を発動。
-- **Pattern B (硬質打撃・金属・ガラス / 例: カツン, パリン)**: 声道をバイパスし、高域通過＋ビットクラッシャー＋急峻な減衰共鳴。
-- **Pattern C (流体・摩擦・環境 / 例: サラサラ, シュー)**: ホワイトノイズ／ピンクノイズ＋バンドパス／フェイザー。
-- **Pattern D (発声・生体・状態 / 例: オギャー, アハハ)**: 声帯パルス励起＋声道フォルマントフィルター。
-
-### 2. TTS音響解析によるフィルター・特徴量抽出パイプライン (`onomato-audio-analyzer`)
-TTS読み上げ音声および効果音実音から、以下の物理・音響特徴量を自動解析・抽出します：
-- **剛性（Stiffness Estimate）**: 高域スペクトル成分の立ち上がりとエネルギー比率
-- **減衰比（Damping Ratio）**: 音響エンベロープの減衰時定数
-- **スペクトル重心（Spectral Centroid）**: 音色の明るさ・硬さの物理指標
-- **低域過渡強度（Sub-Kick / Crest Factor）**: 瞬間的な衝撃波の尖鋭度
-- **母音フォルマント周波数（F1, F2）**: 声の調音点・共鳴構造
-
-### 4. 段階的検証プロシージャル・シンセサイザー（Step 1 〜 Step 3 Ver 3.0）
-音響音声学（Gunnar Fantの音響モデル、Locus理論）と接触力学（Hertz弾性衝突）に基づき、日本語50音およびオノマトペを段階的かつ透明に設計・検証するモジュール群です：
-
-* **【Step 1】母音空間フォルマント・シンセサイザー (`step1_vowel_synthesizer.py` / `step1_vowel_demo.py`)**:
-  * 3並列Biquadフォルマント共鳴器（F1, F2, F3）＋口唇放射（+6dB/oct）により、純粋な母音（a, i, u, e, o）を生成。
-* **【Step 2】子音基音（14音素）物理過渡シンセサイザー (`step2_consonant_synthesizer.py` / `step2_consonant_demo.py`)**:
-  * 14種の子音（k, sh, t, n, h, m, r, w, p, b, d, z, j, v）の物理過渡励起（Hertz接触スパイク、気流乱流ノイズ、鼻腔共鳴、舌先タップ）を4系統のエフェクト（Jerk Slope, Waveshaper Drive, Decay Gate, Sub-Bass Boost）で造形。
-* **【Step 3 Ver 3.0】明瞭弁別 子音 ✕ 母音 統合シンセサイザー (`step3_consonant_vowel_synthesizer.py` / `step3_consonant_vowel_demo.py`)**:
-  * 高域共鳴（F2, F3）のコントラストを完全保持し、VOT（Voice Onset Time）およびLocus時変滑走により、日本語50音の「母音と子音の完全一体化（ひとつの口での発声）」を実現する最新統合Web UI。
-  * **🔊 母音音量 5段階ダイナミックバランス調整 (Lv 1: 18% 〜 Lv 5: 100%)**: 子音アタックと母音持続音の比率をワンクリックで調整可能（初期値: Lv 2 自然バランス推奨）。
-  * **動的ディケイ連動**: 母音音量に応じて持続音の減衰カーブを最適化し、歯切れの良いアタック感を担保。
-  * **プレイヤー一本化 ＆ キャッシュバスター**: HTML5 Base64 Data URI直接指定によりブラウザキャッシュを物理的に無効化し、ボタン押下時に即時自動発声（Autoplay）。
-
-詳細な仕様および解析パイプライン連携については、[PROJECT_STATUS_AND_SPEC.md](PROJECT_STATUS_AND_SPEC.md) をご覧ください。
+外部ライブラリや重いPython環境に依存せず、**HTML5 + JavaScript + Web Audio API 単一ファイル（`index.html`）** だけで完全自律動作します。
 
 ---
 
-## クイックスタート
+## 2. 実装済み 6大オノマトペ多次元モデル
 
-### 1. 依存ライブラリのインストール
-```bash
-pip install numpy scipy matplotlib streamlit
-```
-
-### 2. 【2D XYパッド】オノマトペテクスチャ空間マッピング ＆ リピートシンセサイザー (最新推奨)
-中心(0, 0)を起点に、粒度（上: サラサラ ➔ 下: ガタガタ）✕ 湿度（左: ぱさぱさ ➔ 右: びちゃびちゃ）をパッド上でクリックすると、音が小気味よくリピート再生されます。
-```bash
-# Windows バッチで起動 (ポート 8522)
-launch_xy_pad_demo.bat
-
-# またはスクリプト直接起動
-python run_xy_pad.py
-# => http://localhost:8522
-```
-
-### 3. 【決定版】3-Stage 直列パイプライン・オノマトペシンセサイザーの起動
-言葉の基礎音 ➔ 物理テンポ適応 ➔ 物理エフェクター仕上げの各段階を並列に聴き比べできるWeb UIです。
-```bash
-# Windows バッチで起動 (ポート 8520)
-launch_pipeline_demo.bat
-
-# またはスクリプト直接起動
-python run_pipeline_demo.py
-# => http://localhost:8520
-```
-
-### 4. 子音 ✕ 母音 統合シンセサイザーの起動 (Step 3 Ver 3.0)
-```bash
-# Windows バッチで起動 (ポート 8517)
-launch_step3_consonant_vowel_demo.bat
-
-# またはスクリプト直接起動
-python run_step3.py
-```
-
-### 3. デュアル・エンジン・デモの起動 (Web UI)
-ブラウザ上で声モデル、物理衝撃モデル、ハイブリッド交差点合成の波形・スペクトログラムをリアルタイムに比較・試聴できます。
-
-```bash
-# Windows バッチで起動
-launch_dual_engine_demo.bat
-
-# またはコマンドラインから起動
-streamlit run dual_engine_demo.py
-```
-
-### 4. 単語の自動物理音響解析
-```bash
-python auto_physical_sound_analyzer.py --word ドカン
-```
+| # | モデル名 | 次元構成 | 音響合成エンジン（DSP仕様） | 主なオノマトペ語彙例 |
+|---|---|---|---|---|
+| **1** | **触感テクスチャ 4D** | **X**: 粗滑 (Rough-Smooth)<br>**Y**: 硬軟 (Hard-Soft)<br>**Z**: 乾湿 (Dry-Wet)<br>**W**: 摩擦 (Friction) | BPFノイズ（滑〜粗粒度）✕ 低域正弦波（軟打撃）✕ 高域レゾナンス（硬質打撃）✕ 粘着サイン変調 | さらさら、ざらざら、ふわふわ、ごつごつ、ねばねば |
+| **2** | **電通大 坂本研 心理印象 2D** | **X**: 評価 (快〜不快)<br>**Y**: 活動性 (静〜動) | デュアルオシレータ和声合成（協和音程〜不協和ノコギリ波）✕ 急峻ピッチダイブ（Jerkインパルス衝撃） | ぽかぽか、すっきり、ぎらぎら、どんより、ぐちゃぐちゃ |
+| **3** | **食感力学テクスチャ 4D** | **X**: 破断性 (Fracture)<br>**Y**: 粘弾性 (Viscoelasticity)<br>**Z**: 脆さ (Brittleness)<br>**W**: 弾性復元 (Elastic) | パルスインパルス波 ✕ 破砕バースト（マルチソー歯ノイズ）✕ 低域バウンス（弾力ピッチベンド） | パリパリ、サクサク、もちもち、ぷるぷる、グミグミ |
+| **4** | **ラバン・エフォート 3面直交連動 3D** | **X**: 時間 (急〜持続)<br>**Y**: 重さ (強〜弱)<br>**Z**: 空間 (直接〜柔軟) | **【XY面・XZ面・ZY面 3面同時同期連動】**<br>FM変調ノイズ ✕ 短インパルス打撃 ✕ ステレオ空間パンニング ✕ 音響コーラス | パンッ、スーッ、ドカン、フワッ、スラッシュ |
+| **5** | **ラッセル感情円環 2D** | **X**: 感情価 (Valence)<br>**Y**: 覚醒度 (Arousal) | 倍音協和三角波／正弦波 ✕ 緊張Sawtooth ✕ 心拍LFOピッチビブラート ✕ ダイナミックLPFカットオフ | うきうき、わくわく、いらいら、しょんぼり、まったり |
+| **6** | **調音音響・音象徴 5D** | **X**: F1 (舌の高さ)<br>**Y**: F2 (舌の前後)<br>**Z**: 清濁 (有声/無声)<br>**W**: 破裂摩擦<br>**V**: 鼻音 | リアルタイム・母音直接フォルマント合成 ✕ 短過渡破裂クリック ✕ HPF摩擦子音ノイズ ✕ VoiceBar有声低音 ✕ 鼻音余韻共振 | カンカン、サラサラ、ガンガン、ブンブン、ニャー |
 
 ---
 
-## 大容量音声データ（WAV/MP3）の取り扱い方針
+## 3. 実装済み主要機能一覧
 
-Gitリポジトリの肥大化を防ぎ、常にクリーンな状態を維持するため、**読み上げ音声や生録音マスター音源（数GB級のWAV/MP3）はGit追跡の対象外（`.gitignore`）** としています。
+### ① ⏺ Motion REC & Loop（マウス軌跡の記録＆自動ループ再生・無音休符対応）
+* **録音待機**: 各パッド上の「⏺ REC」ボタンを押すと【🟡 クリック待ち...】状態へ移行。
+* **初動自動トリガー**: パッドをクリックした瞬間に【⏹ REC終了→再生】に変わり記録開始。
+* **無音・休符のサポート（複数ストローク対応）**: クリックを離しても録音は終了せず継続。指を離している間は「休符（無音）」として時間が進み、再度クリックすれば次の発音が記録されます。
+* **もう一度RECボタンで記録終了＆自動ループ**: 再度RECボタンを押した瞬間に録音が完了し、記録された全体の時間軸（音あり区間＋休符無音区間）がそのまま【🔁 LOOP中 (停止)】として自動演奏開始。
+* **ネオン軌跡と無音インジケータ**: 記録したパスがキャンバス上に発光ラインとして描画され、光るカーソルがその上を滑らかに自動走行。発音区間は力強く発光し、休符無音区間は半透明カーソルで通過します。
+* **停止**: ループ中に再度ボタンを押すと即座に停止して通常モード（⏺ REC）に復帰。
 
-- 本リポジトリには、**解析済みの軽量メタデータ（JSON / CSV）および音声合成・解析プログラムコード** のみを完全収録しています。
-- 音声データセットの全生データは、必要に応じて外部クラウドストレージ（Google Drive / Hugging Face Datasets 等）経由でダウンロード可能な構成をとっています。
+### ② 🎚 各パッド独立ボリューム（0〜100% Volume）
+* 各パッドカード上部に専用の音量スライダーを配備（初期値: 80%）。
+* パッド同士の音量バランスを細かく調整可能。
+
+### ③ ⏱ 各パッド独立 BPM（ポリリズム合奏）＆ 🔒 HOLD（固定連打）
+* 各パッドに独立テンポスライダー（40〜300 BPM）を搭載。
+* 異なる周期で各モデルを自動連打させることで、**複雑なポリリズム・オノマトペアンサンブル** が可能。
+* 各パッド独立の「🔒 HOLD」ボタンにより、現在のマウス位置で連打を固定可能。
+
+### ④ 🎨 ラバン3面直交パッド連動（XY / XZ / ZY）
+* ラバン・エフォートの3次元空間を3枚の2Dパッド（XY: 時間✕重さ、XZ: 時間✕空間、ZY: 空間✕重さ）に展開。
+* いずれか1枚の面でマウスを動かすと、他の2面の対応する軸カーソルがリアルタイムに完全連動。
 
 ---
 
-## 関連プロジェクト
+## 4. 最新バグフィックス・音響DSP最適化実績
 
-- **[OnomaDict](https://github.com/richiowaki3/OnomaDict)**: 多言語オノマトペ・多次元ベクトル辞書（本家マスターリポジトリ）
+1. **食感力学テクスチャ（無音バグ解消）**:
+   * `g.exponentialRampToValueAtTime` ➔ `g.gain.exponentialRampToValueAtTime` に修正し、GainNode例外を解消。破断・弾性クリック音が完全に復活。
+2. **調音音響・音象徴（鼻音エラー解消）**:
+   * `nasalG.linearRampToValueAtTime` ➔ `nasalG.gain.linearRampToValueAtTime` に修正。鼻音余韻（V軸）発音時のランタイム例外を解消。
+3. **ラッセル感情（ビブラート深さ正常化）**:
+   * LFOが直接オシレータに接続されていたバイパス配線を、ゲインアッテネータ `lfoG` を経由する配線（`lfo -> lfoG -> osc.frequency`）に修正。覚醒度に応じた心拍ビブラートが美しく効くよう改善。
+4. **触感（粘着音突入ノイズ除去）**:
+   * アタック開始時に `stickG.gain.setValueAtTime(0.0001, now)` を挿入し、ゲインの不連続ジャンプによる「プチッ」という突入矩形ノイズを除去。
+5. **発音数カウンタリセット保護**:
+   * `catch` 節で `activeVoices` をデクリメントする安全処理を追加。
+6. **アンカー点描画のカラーフォールバック**:
+   * `anchorHex(a)` 関数を新設し、アンカー点の配色未定義時でも安全にフォールバック表示。
+
+---
+
+## 5. デプロイおよび稼働状況
+
+| 環境 | 状態 | アクセス方法 / URL |
+|---|---|---|
+| **スタンドアロンWeb版 (ローカル)** | 🟢 完動 | [index.html](file:///d:/Antigravity_Work/MotionAnalysis/index.html) をブラウザで直接ダブルクリック |
+| **Streamlit版 (ローカル)** | 🟢 稼働中 (ポート 8545) | [http://localhost:8545](http://localhost:8545) |
+| **GitHub リポジトリ (開発用)** | 🟢 プッシュ済 (main) | [richiowaki3/Project-KineticChain](https://github.com/richiowaki3/Project-KineticChain) |
+| **GitHub Pages (Web公開用)** | 🟢 プッシュ済 (main) | [richiowaki3/OnomaFoley](https://github.com/richiowaki3/OnomaFoley)<br>公開URL: [https://richiowaki3.github.io/OnomaFoley/](https://richiowaki3.github.io/OnomaFoley/) |
+
+---
+
+## 6. 今後の拡張候補（Next Steps）
+* **MIDIコントローラー / ゲームパッド入力対応**: Web MIDI APIによるハードウェアノブ・フェーダー連動
+* **オーディオ録音・WAVエクスポート機能**: 演奏したオノマトペをワンクリックで音声ファイルとして書き出し
+* **モーションプリセット保存**: お気に入りの軌跡パターンの保存・読み込み機能
