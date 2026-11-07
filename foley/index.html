@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>OnomaFoley</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: two-panel foley stage. Left = the poem stage (text in, onomatopoeia cards out, 4 engines per card/line/poem).
+   Right = the foley console (performance sliders, DMP readout, live scope, 16D inspector). */
+:root{
+  --bg:#E6EAE5; --panel:#F4F6F2; --raise:#FFFFFF; --ink:#16201B; --muted:#56655D; --line:#C5CEC7;
+  --voice:#2C50C2; --phys:#9E5A0B; --cross:#8A2A7A; --tts:#3C4E46; --hot:#C23B22;
+  --f-display:"Dela Gothic One","Hiragino Kaku Gothic StdN","Yu Gothic",sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Consolas",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111613; --panel:#181F1B; --raise:#1F2722; --ink:#E4EBE6; --muted:#93A399; --line:#2E3933;
+    --voice:#86A2FF; --phys:#E2A24E; --cross:#DA7CC9; --tts:#AEBFB6; --hot:#FF6A4D; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111613; --panel:#181F1B; --raise:#1F2722; --ink:#E4EBE6; --muted:#93A399; --line:#2E3933;
+  --voice:#86A2FF; --phys:#E2A24E; --cross:#DA7CC9; --tts:#AEBFB6; --hot:#FF6A4D; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+.wrap{max-width:1260px;margin:0 auto;padding-block:18px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 24px;padding-block:6px 16px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.brand h1{font-family:var(--f-display);font-weight:400;font-size:clamp(30px,5vw,46px);line-height:1;margin:0;letter-spacing:.01em;text-wrap:balance}
+.brand h1 b{font-weight:400;color:var(--cross)}
+.brand p{margin:8px 0 0;color:var(--muted);font-size:13px;max-width:60ch}
+.rec{font-family:var(--f-mono);font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.rec .lamp{width:9px;height:9px;border-radius:50%;background:var(--line);transition:background .15s}
+.rec.on .lamp{background:var(--hot);box-shadow:0 0 0 4px color-mix(in srgb,var(--hot) 22%,transparent)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,372px);gap:18px;align-items:start}
+@media (max-width:940px){.app{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.label{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+h2.label{margin-bottom:10px}
+textarea{width:100%;min-height:78px;resize:vertical;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--raise);color:var(--ink)}
+textarea:focus-visible{outline:2px solid var(--cross);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chipbtn{font:13px var(--f-body);padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.chipbtn:hover{color:var(--ink);border-color:var(--muted)}
+.chipbtn:focus-visible,.go:focus-visible{outline:2px solid var(--cross);outline-offset:2px}
+.go{font:700 14px var(--f-body);padding:9px 18px;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer}
+.status{font-size:13px;color:var(--muted)}
+.status b{color:var(--ink);font-weight:500}
+/* engine buttons */
+.eb{--c:var(--tts);display:inline-flex;align-items:center;gap:6px;font:500 13px var(--f-body);padding:7px 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--c) 45%,transparent);background:color-mix(in srgb,var(--c) 9%,var(--raise));color:var(--c);cursor:pointer;white-space:nowrap}
+.eb:hover{background:color-mix(in srgb,var(--c) 20%,var(--raise))}
+.eb:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+.eb[data-mode="voice"]{--c:var(--voice)} .eb[data-mode="phys"]{--c:var(--phys)} .eb[data-mode="cross"]{--c:var(--cross)}
+.eb.sm{padding:3px 8px;font-size:13px;gap:0}
+.eb.stop{--c:var(--hot)}
+.poemhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:4px}
+.poemtext{font-family:var(--f-display);font-size:clamp(17px,2.2vw,21px);line-height:1.5;margin:4px 0 10px;color:var(--muted)}
+.line{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;padding-block:14px;border-top:1px dashed var(--line)}
+.line-ctrl{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.line-ctrl .ln{font-family:var(--f-mono);font-size:11px;color:var(--muted);letter-spacing:.06em}
+.words{display:flex;flex-wrap:wrap;gap:10px;min-width:0}
+.word{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer;transition:transform .12s,border-color .12s,box-shadow .12s}
+.word:focus-visible{outline:2px solid var(--cross);outline-offset:2px}
+.word.sel{border-color:var(--ink)}
+.word.live{transform:translateY(-3px);border-color:var(--cross);box-shadow:0 6px 18px -10px var(--cross)}
+.wtxt{font-family:var(--f-display);font-size:clamp(26px,4vw,34px);line-height:1.05;display:flex;align-items:center;gap:9px;overflow-wrap:anywhere}
+.wtxt i{width:11px;height:11px;border-radius:50%;background:var(--wc);flex:none;box-shadow:0 0 0 1px var(--line)}
+.wmeta{font-family:var(--f-mono);font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.vec16{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:2px;height:26px;align-items:end;min-width:150px}
+.vec16 span{border-radius:1px;min-height:2px}
+.g1{background:color-mix(in srgb,var(--ink) 62%,transparent)} .g2{background:var(--phys)} .g3{background:var(--voice)} .g4{background:var(--cross)}
+.wbtns{display:flex;gap:4px;flex-wrap:wrap}
+@media (max-width:560px){.line{grid-template-columns:minmax(0,1fr)} .line-ctrl{flex-direction:row;align-items:center;flex-wrap:wrap}}
+/* console */
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:center;padding-block:7px}
+.ctl label{font-weight:500;font-size:14px}
+.ctl output{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--cross);margin:4px 0 0}
+.ctl .ends{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;padding-block:6px}
+.chk input{accent-color:var(--cross);width:16px;height:16px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-family:var(--f-mono);font-size:11.5px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chips span b{color:var(--ink);font-weight:500}
+canvas#scope{width:100%;height:92px;display:block;background:var(--raise);border:1px solid var(--line);border-radius:8px}
+.insp-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.insp-word{font-family:var(--f-display);font-size:30px;line-height:1.1}
+.insp-sub{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.grp{margin-top:12px}
+.grp h3{margin:0 0 4px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.grp h3 i{width:8px;height:8px;border-radius:2px}
+.ax{display:grid;grid-template-columns:88px minmax(0,1fr) 92px;gap:8px;align-items:center;font-size:12.5px;padding-block:2px}
+.ax .nm{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.ax .bar{height:6px;background:color-mix(in srgb,var(--line) 70%,transparent);border-radius:3px;overflow:hidden}
+.ax .bar span{display:block;height:100%;border-radius:3px}
+.ax .val{font-family:var(--f-mono);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:4px;box-shadow:0 0 0 1px var(--line)}
+.mora{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-top:8px;overflow-wrap:anywhere}
+.note{font-size:12.5px;color:var(--muted);line-height:1.5;margin:10px 0 0}
+.copyrow{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+#copyFallback{width:100%;min-height:70px;font:11px var(--f-mono)}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:20;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion: reduce){.word,.rec .lamp{transition:none}.word.live{transform:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Onoma<b>Foley</b></h1>
+      <p>短文をオノマトペの詩に変え、16軸の音象徴ベクトルから声・物理衝撃・その交差で効果音を演奏します。</p>
+    </div>
+    <div class="rec" id="rec"><span class="lamp"></span><span id="recTxt">STANDBY</span></div>
+  </header>
+
+  <div class="app">
+    <div class="col">
+      <section class="panel" aria-labelledby="inLbl">
+        <h2 class="label" id="inLbl">Step 1 · テキスト入力</h2>
+        <textarea id="src" aria-label="短文またはオノマトペ文">激しい雨が降り、雷が轟いて地面が揺れた</textarea>
+        <div class="row" style="margin-top:10px;justify-content:space-between">
+          <button class="go" id="convert">詩に変換</button>
+          <span class="status" id="status"></span>
+        </div>
+        <div class="examples" id="examples"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="poemLbl">
+        <div class="poemhead">
+          <h2 class="label" id="poemLbl" style="margin:0">Step 2–4 · オノマトペ詩とフォーリー演奏</h2>
+          <div class="row" id="poemBtns"></div>
+        </div>
+        <p class="poemtext" id="poemText"></p>
+        <div id="lines"></div>
+      </section>
+    </div>
+
+    <aside class="col">
+      <section class="panel" aria-labelledby="ctlLbl">
+        <h2 class="label" id="ctlLbl">Foley console</h2>
+        <div class="ctl">
+          <label for="vocal">Vocalness</label><output id="vocalO"></output>
+          <input type="range" id="vocal" min="0" max="1" step="0.01" value="0.5">
+          <div class="ends"><span>物理 0.0</span><span>V=0.5 で完全融合</span><span>1.0 声</span></div>
+        </div>
+        <div class="ctl">
+          <label for="stiff">Stiffness（アタック硬さ）</label><output id="stiffO"></output>
+          <input type="range" id="stiff" min="0" max="1" step="0.01" value="0.6">
+          <div class="ends"><span>t<sub>c</sub> 3.0 ms</span><span>0.5 ms</span></div>
+        </div>
+        <div class="ctl">
+          <label for="tempo">Tempo</label><output id="tempoO"></output>
+          <input type="range" id="tempo" min="0.6" max="1.6" step="0.01" value="1">
+        </div>
+        <div class="ctl">
+          <label for="room">Room（残響）</label><output id="roomO"></output>
+          <input type="range" id="room" min="0" max="1" step="0.01" value="0.22">
+        </div>
+        <div class="ctl">
+          <label for="vol">Volume</label><output id="volO"></output>
+          <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+        </div>
+        <label class="chk"><input type="checkbox" id="subk" checked> 初拍 Sub-Kick（40–80 Hz ピッチダイブ）</label>
+        <canvas id="scope" aria-label="出力波形スコープ"></canvas>
+        <h2 class="label" style="margin:14px 0 8px">Dynamic Modulation Profile</h2>
+        <div class="chips" id="dmp"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="inspLbl">
+        <h2 class="label" id="inspLbl">OnomaDict 16D inspector</h2>
+        <div id="insp"></div>
+        <div class="copyrow">
+          <button class="chipbtn" id="copyJson">詩のベクトルを JSON でコピー</button>
+          <span class="status" id="copyMsg"></span>
+        </div>
+        <textarea id="copyFallback" hidden readonly aria-label="JSON"></textarea>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   0. Constants: Dynamic Modulation Profile (DMP)
+   ===================================================================== */
+const DMP = {
+  swing_ratio: 0.58,          // 畳語スイング 58:42
+  second_decay_ratio: 0.65,   // 畳語2音目の振幅比（減衰抑制）
+  sokuon_charge_ms: 18.0,     // 促音「っ」の Hertz 弾性無音チャージ
+  delta_f0_slope_hz: -260.0,  // 句末ピッチブレーキ（初期勾配 Hz/s）
+  accent_sub_kick: [40, 80]   // 初拍 Sub-Kick 下限/上限 Hz
+};
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* =====================================================================
+   1. Kana -> mora parser
+   ===================================================================== */
+const toKata = s => s.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+const KROWS = {"":"アイウエオ",k:"カキクケコ",g:"ガギグゲゴ",s:"サシスセソ",z:"ザジズゼゾ",t:"タチツテト",d:"ダヂヅデド",
+  n:"ナニヌネノ",h:"ハヒフヘホ",b:"バビブベボ",p:"パピプペポ",m:"マミムメモ",y:"ヤ・ユ・ヨ",r:"ラリルレロ",w:"ワヰ・ヱヲ"};
+const KMAP = {};
+for (const [c, row] of Object.entries(KROWS)) [...row].forEach((ch, i) => { if (ch !== "・") KMAP[ch] = [c, "aiueo"[i]]; });
+Object.assign(KMAP, {"シ":["sh","i"],"チ":["ch","i"],"ツ":["ts","u"],"フ":["f","u"],"ジ":["j","i"],"ヂ":["j","i"],"ヅ":["z","u"],"ヴ":["v","u"]});
+// consonant classes: P voiceless plosive, A affricate, B voiced plosive, F fricative, Z voiced fricative, M nasal, L liquid, G glide, V none
+const CCLASS = {"":"V",k:"P",t:"P",p:"P",ch:"A",ts:"A",g:"B",d:"B",b:"B",s:"F",sh:"F",h:"F",f:"F",z:"Z",j:"Z",v:"Z",m:"M",n:"M",N:"M",r:"L",y:"G",w:"G"};
+
+function parseMora(word) {
+  const s = toKata(word), out = [];
+  for (const ch of s) {
+    if (ch === "ッ") { out.push({type:"Q", c:"", v:""}); continue; }
+    if (ch === "ン") { out.push({type:"N", c:"N", v:"N"}); continue; }
+    if ("ー〜～".includes(ch)) { const p = [...out].reverse().find(m => m.v); out.push({type:"R", c:"", v: p ? p.v : "a"}); continue; }
+    const sm = "ァィゥェォャュョ".indexOf(ch);
+    if (sm >= 0) {
+      const v = "aiueoauo"[sm], prev = out[out.length - 1];
+      if (prev && prev.type === "M") { prev.v = v; if (sm >= 5) prev.pal = true; }
+      else out.push({type:"M", c: sm >= 5 ? "y" : "", v});
+      continue;
+    }
+    const m = KMAP[ch];
+    if (!m) continue;
+    const prev = out[out.length - 1];
+    // vowel-only mora repeating the previous vowel = long vowel (ゴオオ)
+    if (m[0] === "" && prev && prev.v === m[1] && prev.type !== "Q") { out.push({type:"R", c:"", v:m[1]}); continue; }
+    out.push({type:"M", c:m[0], v:m[1]});
+  }
+  for (let i = 0; i < out.length - 1; i++) if (out[i].type === "Q") out[i + 1].afterQ = true;
+  return out;
+}
+function findRedup(ms) {
+  const key = ms.map(m => m.type + m.c + m.v), n = key.length;
+  for (let p = 1; p <= n / 2; p++) {
+    if (n % p) continue;
+    let ok = true;
+    for (let i = p; i < n && ok; i++) if (key[i] !== key[i % p]) ok = false;
+    if (ok) return {unit: p, count: n / p};
+  }
+  return null;
+}
+
+/* =====================================================================
+   2. OnomaDict 16D vector (phonosemantic derivation + overrides)
+   ===================================================================== */
+// per consonant class: [weight, sudden, indirect, hard, moist, turbulence]
+const CF = {P:[.35,.85,.2,.85,.15,.2],A:[.35,.7,.4,.7,.35,.5],B:[.85,.8,.25,.75,.25,.25],F:[.2,.3,.8,.15,.6,.8],
+  Z:[.7,.35,.75,.35,.6,.9],M:[.45,.2,.4,.2,.45,.1],L:[.5,.4,.7,.3,.4,.4],G:[.3,.25,.6,.1,.7,.2],V:[.35,.3,.5,.15,.4,.2]};
+// per vowel: [weightΔ, brightness, hardΔ, moistΔ, hue°]
+const VFX = {a:[.1,.55,.05,0,18],i:[-.15,1,.15,-.05,52],u:[-.05,.3,-.1,.15,215],e:[0,.7,0,0,135],o:[.15,.15,0,.05,268],N:[.1,.2,-.1,.1,300]};
+const OVR = {
+  "キラキラ":{material:"metal",temp:-1},"ピカッ":{material:"metal"},"パリン":{material:"metal"},"ガシャーン":{material:"metal"},
+  "チリン":{material:"metal"},"カーン":{material:"metal"},"ゴーン":{material:"metal"},"キーン":{material:"metal",temp:-3},
+  "ドカン":{material:"membrane"},"ズドン":{material:"membrane"},"ドカーン":{material:"membrane"},"ドンドン":{material:"membrane"},
+  "ゴロゴロ":{material:"membrane"},"ズシン":{material:"membrane"},"ドスン":{material:"membrane"},"ドキドキ":{material:"membrane",temp:1},
+  "バクバク":{material:"membrane",temp:2},"ボン":{material:"membrane"},
+  "ポタポタ":{material:"liquid"},"ピチャン":{material:"liquid"},
+  "ザブーン":{material:"liquid"},"ゴクゴク":{material:"liquid"},"バシャ":{material:"liquid"},
+  "バシャバシャ":{material:"liquid"},"チャプチャプ":{material:"liquid"},"ザザー":{material:"liquid"},"ポロポロ":{material:"liquid"},
+  "ガタガタ":{material:"wood"},"トントン":{material:"wood"},"コツコツ":{material:"wood"},"チクタク":{material:"wood"},
+  "カリカリ":{material:"wood"},"バタン":{material:"wood"},"ガチャ":{material:"metal"},"カチャ":{material:"metal"},
+  "メラメラ":{temp:3},"ジリジリ":{temp:3},"ギラギラ":{temp:3},"ゴウゴウ":{temp:2},"ポカポカ":{temp:2},"ジュージュー":{temp:3},"ジュー":{temp:3},
+  "ザーザー":{material:"liquid",temp:-1},"ポツポツ":{material:"liquid",temp:-1},"シトシト":{material:"liquid",temp:-1},"ヒヤッ":{temp:-3},"ヒンヤリ":{temp:-2},"シンシン":{temp:-3},"ヒュー":{temp:-1},"ビュービュー":{temp:-2},"シーン":{temp:-1}
+};
+const MAT = {
+  wood:    {r:[1,2.76,5.40,8.93], d:[1,.55,.32,.18], tau:.16, name:"木材", fk:.6},
+  membrane:{r:[1,1.59,2.14,2.30,2.65,2.92], d:[1,.7,.55,.45,.35,.3], tau:.32, name:"膜", fk:.25},
+  metal:   {r:[1,1.47,2.09,2.56,2.98,3.53,4.13,4.87,5.44,6.21], d:[1,.92,.85,.8,.74,.7,.64,.6,.55,.5], tau:1.0, name:"金属", fk:.9},
+  liquid:  {r:[1,1.83,2.95], d:[1,.5,.3], tau:.05, name:"液体", fk:.8}
+};
+function hslHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+  return "#" + [f(0), f(8), f(4)].map(x => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+function deriveVector(kata, moras, redup) {
+  const M = moras.filter(m => m.type === "M" || m.type === "N");
+  const has = t => moras.some(m => m.type === t);
+  const hasQ = has("Q"), hasN = has("N"), hasLong = has("R");
+  const last = moras[moras.length - 1] || {type:"M", v:"a"};
+  let W=0,S=0,I=0,H=0,Mo=0,T=0,Br=0,ws=0,voiced=0,plos=0,fric=0,iC=0,aoC=0,cold=0,pal=0,hx=0,hy=0;
+  const warmRJ = moras.some(m => m.c === "r" || m.c === "j");
+  M.forEach((m, idx) => {
+    const cls = m.type === "N" ? "M" : (CCLASS[m.c] || "V"), f = CF[cls], vv = VFX[m.type === "N" ? "N" : m.v] || VFX.a, w = idx === 0 ? 1.5 : 1;
+    W += w*(f[0]+vv[0]); S += w*f[1]; I += w*f[2]; H += w*(f[3]+vv[2]); Mo += w*(f[4]+vv[3]); T += w*f[5]; Br += w*vv[1]; ws += w;
+    if ("BZ".includes(cls)) voiced++; if ("PB".includes(cls)) plos++; if ("FG".includes(cls)) fric++;
+    if (m.v === "i") iC++; if (m.v === "a" || m.v === "o") aoC++;
+    if (["k","h","s","sh","f","t","ch","ts"].includes(m.c)) cold++;
+    if (m.pal) pal++;
+    const hue = vv[4] * Math.PI / 180; hx += w*Math.cos(hue); hy += w*Math.sin(hue);
+  });
+  const n = Math.max(1, M.length); ws = ws || 1;
+  const v = {};
+  v.Weight = clamp(W/ws);
+  v.Time = clamp(S/ws + (hasQ?.22:0) - (hasLong?.2:0) - (redup?.05:0));
+  v.Space = clamp(I/ws + (redup?.08:0));
+  v.Flow = clamp(.45 + (hasLong?.25:0) + (moras.some(m=>m.c==="r")?.15:0) - (hasQ?.3:0) - (last.type==="N"?.1:0) + (redup?.05:0));
+  v.Hardness = clamp(H/ws + (hasQ?.1:0));
+  v.Moisture = clamp(Mo/ws + pal/n*.15);
+  const vr = voiced / n;
+  const bright = clamp(Br/ws*.7 + (1-vr)*.3 - v.Weight*.15);
+  v.Freq_Hz = Math.round(60 * Math.pow(4000/60, bright));
+  v.Decay = +clamp(.08 + (hasLong?.45:0) + (hasN?.35:0) + v.Hardness*.25 + (1-v.Time)*.25 - (last.type==="Q"?.15:0), .05, 1.6).toFixed(2);
+  const logRe = 2 + 4*clamp(T/ws) + (hasLong?.5:0) + (redup?.2:0);
+  v.Reynolds = Math.round(Math.pow(10, logRe));
+  v.ReyNorm = clamp((logRe - 2) / 4.7);
+  v.Boyle = clamp(.5 - (hasQ?.25:0) - plos/n*.25 + fric/n*.25 + (hasLong?.15:0) + (moras.some(m=>m.v==="u")?.05:0));
+  const temp = vr*.7 + aoC/n*.8 + (warmRJ?1:0) - iC/n*1.6 - cold/n*.7;
+  v.Temp_Code = clamp(Math.round(temp*1.6 - .3), -3, 3);
+  let hue = Math.atan2(hy, hx) * 180 / Math.PI; if (hue < 0) hue += 360;
+  v.Color_Hex = hslHex(hue, 38 + v.Hardness*42, 66 - v.Weight*30);
+  const first = M[0] || {c:"", v:"a"}, c0 = first.type === "N" ? "M" : (CCLASS[first.c] || "V");
+  v.Accent = clamp(CF[c0][1]*.55 + ("BZ".includes(c0)?.2:0) + (hasQ?.15:0) + (first.afterQ?.2:0) + v.Weight*.15);
+  let ct = last.type==="N" ? -.55 : last.type==="Q" ? -.35 : last.type==="R" ? -.2 : last.v==="i" ? .35 : last.v==="u" ? -.1 : 0;
+  if (redup) ct *= .5;
+  v.Contour = +ct.toFixed(2);
+  v.Meter = redup ? redup.count : Math.max(1, Math.round(moras.length / 2));
+  v.Regularity = redup ? clamp(.82 + .04*(redup.count-2)) : clamp(.3 + (hasLong?.15:0) + (moras.length<=2?.1:0));
+  const o = OVR[kata];
+  if (o && o.temp !== undefined) v.Temp_Code = o.temp;
+  return {v, voicedRatio: vr, override: o};
+}
+function pickMaterial(v) {
+  if (v.Moisture > .55 && v.Hardness < .5) return "liquid";
+  if (v.Hardness > .62 && v.Freq_Hz > 900) return "metal";
+  if (v.Weight > .6) return "membrane";
+  return "wood";
+}
+function makeEntry(text) {
+  const kata = toKata(text);
+  const moras = parseMora(text);
+  const redup = moras.length > 1 ? findRedup(moras) : null;
+  const {v, voicedRatio, override} = deriveVector(kata, moras, redup);
+  return {text, kata, moras, redup, vec: v, voicedRatio, material: (override && override.material) || pickMaterial(v)};
+}
+
+/* =====================================================================
+   3. Text -> onomatopoeia poem
+   ===================================================================== */
+const LEX = [
+  {re:/雨|あめ|\brain/i, l:["シトシト"], m:["ポツポツ"], h:["ポツポツ","ザーザー"]},
+  {re:/雷|かみなり|\bthunder/i, l:["ゴロゴロ"], m:["ゴロゴロ"], h:["ズドン"]},
+  {re:/轟|とどろ|\broar/i, l:["ゴォー"], m:["ゴォー"], h:["ゴォー"], skipIf:/雷|かみなり|thunder/i},
+  {re:/揺れ|揺ら|ゆれ|\bshak|\bquak/i, l:["ユラユラ"], m:["グラグラ"], h:["ガタガタ"]},
+  {re:/地面|大地|地鳴|\bground/i, l:["ズン"], m:["ズシン"], h:["ズシン"], weak:true},
+  {re:/風|かぜ|\bwind/i, l:["ソヨソヨ"], m:["ヒュー"], h:["ヒュー","ビュービュー"]},
+  {re:/波|海|うみ|\bwaves?\b|\bsea\b/i, l:["チャプチャプ"], m:["ザザー"], h:["ザブーン"]},
+  {re:/滴|しずく|\bdrip/i, l:["ポタポタ"], m:["ポタポタ"], h:["ピチャン"]},
+  {re:/水|みず|\bwater/i, l:["チャプン"], m:["バシャ"], h:["バシャバシャ"], weak:true},
+  {re:/川|流れ|ながれ|\briver|\bstream/i, l:["サラサラ"], m:["サラサラ"], h:["ゴウゴウ"]},
+  {re:/火|炎|燃|\bfire|\bburn|\bflame/i, l:["チロチロ"], m:["メラメラ"], h:["ゴウゴウ"]},
+  {re:/光|輝|かがや|星|\bshin|\bstars?\b|\bsparkl/i, l:["キラキラ"], m:["キラキラ"], h:["ピカッ"]},
+  {re:/扉|ドア|戸|\bdoor/i, l:["カチャ"], m:["ガチャ"], h:["バタン"]},
+  {re:/走|\brun/i, l:["タッタッ"], m:["タッタッ"], h:["ダダダッ"]},
+  {re:/歩|あるい|足音|\bwalk|\bstep/i, l:["トコトコ"], m:["テクテク"], h:["ドスドス"]},
+  {re:/叩|たた|ノック|\bknock|\bbeat|\bhit/i, l:["トントン"], m:["トントン"], h:["ドンドン"]},
+  {re:/割れ|割っ|砕|壊|\bbreak|\bshatter|\bsmash/i, l:["パリン"], m:["パリン"], h:["ガシャーン"]},
+  {re:/落ち|落と|\bfell\b|\bdrop/i, l:["ストン"], m:["ドサッ"], h:["ドスン"]},
+  {re:/爆|\bexplo|\bblast/i, l:["ボン"], m:["ドカン"], h:["ドカーン"]},
+  {re:/心|胸|恋|ときめ|\bheart/i, l:["トクン"], m:["ドキドキ"], h:["バクバク"]},
+  {re:/笑|わら|\blaugh/i, l:["クスクス"], m:["ニコニコ"], h:["ゲラゲラ"]},
+  {re:/泣|涙|なみだ|\bcry|\bcried|\btears?\b/i, l:["ポロポロ"], m:["シクシク"], h:["ワンワン"]},
+  {re:/食べ|噛|かじ|\beat|\bbite|\bchew/i, l:["モグモグ"], m:["モグモグ"], h:["ガツガツ"]},
+  {re:/焼|揚げ|\bfry|\bgrill|\bcrisp/i, l:["ジュー"], m:["カリカリ"], h:["ジュージュー"]},
+  {re:/飲|\bdrink|\bgulp/i, l:["コクン"], m:["ゴクゴク"], h:["ゴクゴク"]},
+  {re:/眠|寝|ねむ|\bsleep/i, l:["スヤスヤ"], m:["スヤスヤ"], h:["グーグー"]},
+  {re:/静|しず|沈黙|\bsilen|\bquiet/i, l:["シーン"], m:["シーン"], h:["シーン"]},
+  {re:/雪|\bsnow/i, l:["シンシン"], m:["チラチラ"], h:["ビュービュー"]},
+  {re:/冷|寒|氷|\bcold|\bice\b|\bfreez/i, l:["ヒヤッ"], m:["ヒンヤリ"], h:["キーン"]},
+  {re:/熱|暑|太陽|陽射|\bhot\b|\bsun/i, l:["ポカポカ"], m:["ジリジリ"], h:["ギラギラ"]},
+  {re:/回|まわ|転|\bspin|\bturn/i, l:["クルクル"], m:["クルクル"], h:["グルグル"]},
+  {re:/飛|鳥|翼|\bfly|\bbird|\bwing/i, l:["パタパタ"], m:["パタパタ"], h:["バサバサ"]},
+  {re:/時計|秒針|\bclock/i, l:["チクタク"], m:["チクタク"], h:["チクタク"]},
+  {re:/車|エンジン|\bcar\b|\bengine/i, l:["ブーン"], m:["ブーン"], h:["ブォーン"]},
+  {re:/怒|\bangry|\brage/i, l:["ムッ"], m:["プンプン"], h:["カッ"]},
+  {re:/驚|おどろ|びっくり|\bsurpris|\bstartl/i, l:["ハッ"], m:["ドキッ"], h:["ギョッ"]},
+  {re:/柔|やわ|雲|綿|\bsoft\b|\bcloud|\bfluff/i, l:["フワフワ"], m:["フワフワ"], h:["モコモコ"]},
+  {re:/鐘|ベル|\bbell/i, l:["チリン"], m:["カーン"], h:["ゴーン"]},
+  {re:/撃|銃|\bgun|\bshot|\bshoot/i, l:["パン"], m:["バン"], h:["ズキューン"]}
+];
+const HEAVY = /激し|強[いく烈風]|大[雨風きな]|轟|凄|すご|荒|猛|ひど|一気|嵐|\bheavy|\bhard\b|\bloud|\bviolent|\bstorm/i;
+const LIGHT = /小[さ雨]|静か|そっと|優し|やさし|微|かすか|ほのか|ゆっくり|少し|\bgentl|\bsoft\b|\blight(ly)?\b|\bquiet|\bfaint/i;
+const KANA_TOKEN = /^[ぁ-ゖァ-ヺー〜～]+$/;
+
+function isOnomaText(s) {
+  const toks = s.trim().split(/[\s　、。,.!！?？\n]+/).filter(Boolean);
+  if (!toks.length) return false;
+  return toks.every(t => KANA_TOKEN.test(t) &&
+    (/[ァ-ヺ]/.test(t) || findRedup(parseMora(t)) || /[っんりー]$/.test(t)));
+}
+function looksOnoma(t) { // katakana run embedded in a normal sentence
+  const ms = parseMora(t);
+  return ms.length >= 2 && (findRedup(ms) || /[ッンー]$/.test(t) || /ッ/.test(t));
+}
+function textToPoem(src) {
+  const text = src.trim();
+  if (!text) return {mode:"empty", lines:[]};
+  if (isOnomaText(text)) {
+    const lines = text.split(/\n+/).map(l => l.split(/[\s　、。,.!！?？]+/).filter(Boolean)).filter(l => l.length);
+    return {mode:"keep", lines};
+  }
+  const clauses = text.split(/[、。,.!！?？;；\n]+/).map(s => s.trim()).filter(Boolean);
+  let level = 1, prevLevel = 1;
+  const clauseWords = [];
+  for (const cl of clauses) {
+    level = HEAVY.test(cl) ? 2 : LIGHT.test(cl) ? 0 : (prevLevel === 2 ? 2 : 1);
+    prevLevel = level;
+    const hits = [];
+    for (const e of LEX) {
+      const m = cl.match(e.re);
+      if (!m) continue;
+      if (e.skipIf && e.skipIf.test(cl)) continue;
+      hits.push({idx: m.index, words: e[["l","m","h"][level]], weak: !!e.weak});
+    }
+    const kat = cl.match(/[ァ-ヺー]{2,}/g) || [];
+    let from = 0;
+    for (const k of kat) { const at = cl.indexOf(k, from); from = at + k.length; if (looksOnoma(k)) hits.push({idx: at, words:[k], weak:false}); }
+    const strong = hits.filter(h => !h.weak);
+    const use = (strong.length ? strong : hits).sort((a, b) => a.idx - b.idx);
+    let words = use.flatMap(h => h.words);
+    if (!words.length && cl.length > 1) words = [["フワリ","サワサワ","ドドド"][level]];
+    clauseWords.push(words);
+  }
+  // prosody: dedupe neighbours, then pack clauses into lines of up to 4 words
+  const lines = []; let cur = [], lastW = "";
+  for (const ws of clauseWords) {
+    const w2 = ws.filter(w => { const keep = w !== lastW; lastW = w; return keep; });
+    if (!w2.length) continue;
+    if (cur.length && cur.length + w2.length > 4) { lines.push(cur); cur = []; }
+    cur.push(...w2);
+  }
+  if (cur.length) lines.push(cur);
+  return {mode:"convert", lines};
+}
+
+/* =====================================================================
+   4. Timing plan per word (swing, sokuon charge, accent)
+   ===================================================================== */
+function planWord(entry, opts, phraseEnd) {
+  const v = entry.vec, ms = entry.moras;
+  const base = (0.175 - v.Time * 0.075) / opts.tempo;
+  const unit = entry.redup ? entry.redup.unit : 0;
+  const ev = [];
+  ms.forEach((m, i) => {
+    const u = unit ? Math.floor(i / unit) : 0;
+    if (m.type === "Q") {
+      const final = i === ms.length - 1;
+      ev.push({type:"Q", u, final, dur: final ? base * 0.35 : DMP.sokuon_charge_ms / 1000 + base * 0.2});
+    } else if (m.type === "R") {
+      const p = ev[ev.length - 1];
+      if (p && p.type !== "Q") { p.dur += base * 1.15; p.long = true; }
+    } else if (m.type === "N") {
+      ev.push({type:"N", c:"N", v:"N", cls:"M", u, dur: base * 0.95, gain:1});
+    } else {
+      ev.push({type:"M", c:m.c, v:m.v, pal:!!m.pal, cls: CCLASS[m.c] || "V", u, afterQ: !!m.afterQ, dur: base, gain:1});
+    }
+  });
+  // 畳語スイング 58:42 and second-unit ratio
+  if (entry.redup) {
+    for (const e of ev) {
+      if (e.type === "Q") continue;
+      const odd = e.u % 2 === 1;
+      e.dur *= odd ? 2 * (1 - DMP.swing_ratio) : 2 * DMP.swing_ratio;
+      if (odd) e.gain *= DMP.second_decay_ratio;
+    }
+  }
+  // accent on first sounding mora; Hertz charge after sokuon: boost = 1 + 0.6·x^1.5
+  const firstSnd = ev.find(e => e.type !== "Q");
+  if (firstSnd) { firstSnd.gain *= 1 + 0.35 * v.Accent; firstSnd.first = true; }
+  for (let i = 1; i < ev.length; i++) {
+    if (ev[i - 1].type === "Q" && ev[i].type !== "Q") {
+      const x = clamp(ev[i - 1].dur / (DMP.sokuon_charge_ms / 1000), 0, 1.5);
+      ev[i].charge = 1 + 0.6 * Math.pow(x, 1.5);
+      ev[i].gain *= ev[i].charge;
+    }
+  }
+  let t = 0;
+  for (const e of ev) { e.t = t; t += e.dur; }
+  let unitLen = 0;
+  if (entry.redup && entry.redup.count >= 2) {
+    const u0 = ev.filter(e => e.u === 0), u1 = ev.filter(e => e.u === 1);
+    unitLen = (u0.reduce((a, e) => a + e.dur, 0) + u1.reduce((a, e) => a + e.dur, 0)) / 2;
+  }
+  const sounding = ev.filter(e => e.type !== "Q");
+  if (phraseEnd && sounding.length) sounding[sounding.length - 1].brake = true;
+  return {events: ev, dur: Math.max(t, 0.05), unitLen, base};
+}
+
+/* =====================================================================
+   5. Engine B: physical impact renderer (JS sample loop)
+   ===================================================================== */
+function rng(seedStr) {
+  let h = 1779033703;
+  for (const ch of seedStr) h = Math.imul(h ^ ch.charCodeAt(0), 3432918353), h = h << 13 | h >>> 19;
+  return () => { h = Math.imul(h ^ h >>> 16, 2246822507); h = Math.imul(h ^ h >>> 13, 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+}
+function hertzPulse(tc, sr) { // F(t) = F0 · sin(π t / tc)^1.5
+  const n = Math.max(2, Math.round(tc * sr)), p = new Float32Array(n);
+  let sum = 0;
+  for (let k = 0; k < n; k++) { p[k] = Math.pow(Math.sin(Math.PI * (k + 0.5) / n), 1.5); sum += p[k]; }
+  return {raw: p, norm: p.map(x => x / sum)};
+}
+function addMode(out, s0, exc, f, tau, amp, sr) { // two-pole resonator driven by excitation
+  const w = 2 * Math.PI * f / sr;
+  if (w >= Math.PI * 0.92 || s0 >= out.length) return;
+  const r = Math.exp(-1 / (tau * sr)), c1 = 2 * r * Math.cos(w), c2 = -r * r, g = Math.sin(w) * amp;
+  const len = Math.min(out.length - s0, Math.ceil(tau * sr * 7) + exc.length);
+  let y1 = 0, y2 = 0;
+  for (let n = 0; n < len; n++) {
+    const y = (n < exc.length ? exc[n] * g : 0) + c1 * y1 + c2 * y2;
+    out[s0 + n] += y; y2 = y1; y1 = y;
+  }
+}
+function addBubble(out, s0, f, amp, sr, rnd) { // Minnaert-style rising chirp
+  const tau = 0.01 + 0.02 * rnd(), len = Math.min(out.length - s0, Math.ceil(tau * sr * 6));
+  let ph = 0;
+  for (let n = 0; n < len; n++) {
+    const t = n / sr; ph += 2 * Math.PI * f * (1 + 2.2 * t / (tau * 6)) / sr;
+    out[s0 + n] += amp * Math.sin(ph) * Math.exp(-t / tau) * Math.min(1, n / (0.001 * sr));
+  }
+}
+const GRAIN_F = {s:4800, sh:3000, h:1300, f:1700, z:3600, j:2600, v:2000, ts:4200, ch:3400};
+function renderPhys(entry, plan, opts, sr) {
+  const v = entry.vec, mat = MAT[entry.material], rnd = rng(entry.kata);
+  const tail = Math.min(2.0, v.Decay * 1.4 + mat.tau * 1.5 + 0.1);
+  const out = new Float32Array(Math.ceil((plan.dur + tail + 0.05) * sr));
+  const tc = lerp(3.0, 0.5, clamp(opts.stiffness * 0.75 + v.Hardness * 0.25)) / 1000;
+  const f1 = clamp(v.Freq_Hz * mat.fk, 45, 2400);
+  const tau0 = mat.tau * (0.5 + v.Decay * 1.5);
+  const transients = [];
+  const VF = {a:1, i:1.6, u:0.82, e:1.25, o:0.72, N:0.5};
+  const CLS_AMP = {P:1, B:1.2, A:.8, F:.5, Z:.6, M:.55, L:.8, G:.45, V:.5};
+  const impact = (s0, amp, f, tau, tcx) => {
+    const P = hertzPulse(tcx, sr);
+    const tilt = 1.25 - 0.85 * v.Hardness;
+    mat.r.forEach((ratio, k) => {
+      const det = 1 + (rnd() - 0.5) * 0.02;
+      addMode(out, s0, P.norm, f * ratio * det, tau * mat.d[k], amp * Math.pow(k + 1, -tilt) * (0.8 + 0.4 * rnd()), sr);
+    });
+    for (let k = 0; k < P.raw.length && s0 + k < out.length; k++) out[s0 + k] += P.raw[k] * amp * 0.22 * v.Hardness;
+    transients.push(s0);
+  };
+  for (const ev of plan.events) {
+    const s0 = Math.floor(ev.t * sr);
+    if (ev.type === "Q") { // hand-damping of the ringing (closure), plus a stop click when final
+      const tauD = 0.012 * sr;
+      for (let n = s0; n < out.length; n++) out[n] *= Math.exp(-(n - s0) / tauD);
+      if (ev.final) impact(s0, 0.18, f1 * 1.8, 0.02, 0.0004);
+      continue;
+    }
+    const amp = ev.gain * (0.6 + 0.4 * v.Weight) * (CLS_AMP[ev.cls] || .5);
+    let f = f1 * (VF[ev.v] || 1);
+    if (ev.brake) f *= 0.94;
+    const tau = tau0 * (ev.long ? 1.8 : 1);
+    if (ev.cls === "F" || ev.cls === "Z" || ev.cls === "A") { // airflow -> stochastic Hertz grains (rain / hiss / wind)
+      const dur = ev.dur, density = (150 + 2600 * v.ReyNorm) * (ev.cls === "A" ? .5 : 1);
+      const nG = Math.round(density * dur), fc = GRAIN_F[ev.c] || 3000;
+      for (let g = 0; g < nG; g++) {
+        const tt = rnd() * dur, env = Math.min(1, tt / 0.02) * Math.min(1, (dur - tt) / (dur * 0.35) + 0.15);
+        const sg = s0 + Math.floor(tt * sr), a = amp * env * (0.25 + 0.75 * rnd() * rnd()) * 0.55;
+        addMode(out, sg, [1], fc * (0.6 + 0.8 * rnd()), 0.0015 + 0.004 * rnd(), a, sr);
+        if (ev.cls === "Z" && rnd() < 0.35) addMode(out, sg, [1], f * (0.5 + rnd()), 0.01, a * 0.9, sr);
+        if (v.Moisture > 0.5 && rnd() < 0.06) addBubble(out, sg, 500 + 2200 * rnd(), a * 1.4, sr, rnd);
+      }
+      if (ev.cls !== "F") impact(s0, amp * 0.6, f, tau * 0.6, tc);
+      else if (ev.first) impact(s0, amp * 0.35, f, tau * 0.4, tc);
+    } else if (ev.cls === "L") { // rolling: three sub-impacts (ゴロゴロ rumble)
+      [0, .33, .66].forEach((p, k) => impact(s0 + Math.floor(p * ev.dur * sr), amp * [1, .7, .5][k], f * 0.85, tau, tc * 1.3));
+    } else if (ev.type === "N") { // nasal hum: low resonant tail
+      impact(s0, amp * 0.45, f * 0.5, tau * 2.5, tc * 1.6);
+    } else {
+      impact(s0, amp, f, tau, ev.cls === "B" ? tc * 1.4 : tc);
+      if (ev.long) impact(s0 + Math.floor(ev.dur * 0.45 * sr), amp * 0.25, f, tau, tc * 2);
+    }
+    if (v.Moisture > 0.45 && ev.cls !== "F") addBubble(out, s0 + Math.floor(0.004 * sr), clamp(f * 1.5, 300, 3200), amp * (v.Moisture - 0.3), sr, rnd);
+  }
+  let peak = 1e-9;
+  for (let n = 0; n < out.length; n++) peak = Math.max(peak, Math.abs(out[n]));
+  const k = 0.85 / peak * (0.65 + 0.35 * v.Weight);
+  for (let n = 0; n < out.length; n++) out[n] *= k;
+  // Bitcrusher on the transient window only (剥離インパルス)
+  if (v.Hardness > 0.45) {
+    const hold = 1 + Math.round(v.Hardness * 6), q = Math.pow(2, Math.round(13 - v.Hardness * 9) - 1), win = Math.floor(0.012 * sr);
+    for (const s0 of transients) {
+      let held = 0;
+      for (let n = 0; n < win && s0 + n < out.length; n++) {
+        if (n % hold === 0) held = Math.round(out[s0 + n] * q) / q;
+        const mix = v.Hardness * (1 - n / win);
+        out[s0 + n] = out[s0 + n] * (1 - mix) + held * mix;
+      }
+    }
+  }
+  return out;
+}
+
+/* =====================================================================
+   6. Web Audio graph builders
+   ===================================================================== */
+const VFORM = {a:[800,1200,2500], i:[300,2300,3000], u:[350,1300,2300], e:[500,1900,2500], o:[500,800,2400], N:[280,1350,2500]};
+const CDUR = {P:.022, A:.045, F:.065, Z:.055, B:.02, M:.04, L:.015, G:.04, V:0};
+const GLIDE = {P:.012, A:.016, B:.014, F:.02, Z:.02, M:.025, L:.018, G:.045, V:.03};
+const NOISE_F = {k:[2200,3],t:[4000,2],p:[900,1],ch:[3600,2],ts:[5200,2],g:[1800,3],d:[3500,2],b:[800,1],s:[6500,2.2],sh:[3600,2],h:[1500,.7],f:[1800,.8],z:[5500,2],j:[3400,2],v:[2000,1]};
+const LAB = ["p","b","m","f","w","v"], ALV = ["t","d","s","z","n","r","ts"], VEL = ["k","g"], PALC = ["sh","j","ch","y"];
+
+let GW = null, NB = null;
+function glottalWave(ctx) { // LF-like glottal flow derivative -> PeriodicWave (80 harmonics)
+  if (GW && GW.ctx === ctx) return GW.w;
+  const N = 1024, H = 80, Tp = .42, Tn = .16, g = new Float32Array(N), d = new Float32Array(N);
+  for (let n = 0; n < N; n++) { const t = n / N; g[n] = t < Tp ? .5 * (1 - Math.cos(Math.PI * t / Tp)) : t < Tp + Tn ? Math.cos(Math.PI * (t - Tp) / (2 * Tn)) : 0; }
+  for (let n = 0; n < N; n++) d[n] = g[(n + 1) % N] - g[n];
+  const re = new Float32Array(H + 1), im = new Float32Array(H + 1);
+  for (let k = 1; k <= H; k++) { let a = 0, b = 0; for (let n = 0; n < N; n++) { const ph = 2 * Math.PI * k * n / N; a += d[n] * Math.cos(ph); b += d[n] * Math.sin(ph); } re[k] = 2 * a / N; im[k] = 2 * b / N; }
+  GW = {ctx, w: ctx.createPeriodicWave(re, im)};
+  return GW.w;
+}
+function noiseBuf(ctx) {
+  if (NB && NB.ctx === ctx) return NB.b;
+  const b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  NB = {ctx, b}; return b;
+}
+function tanhCurve(k) { const n = 1024, c = new Float32Array(n), t = Math.tanh(k); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / t; } return c; }
+function glide(param, from, to, t, dur) { // Locus cosine glide
+  const n = 16, c = new Float32Array(n);
+  for (let i = 0; i < n; i++) c[i] = from + (to - from) * (1 - Math.cos(Math.PI * i / (n - 1))) / 2;
+  param.setValueCurveAtTime(c, t, Math.max(0.004, dur));
+}
+function formantSchedule(plan, T) {
+  const moves = []; let prev = null;
+  for (const ev of plan.events) {
+    if (ev.type !== "M" && ev.type !== "N") continue;
+    const to = VFORM[ev.type === "N" ? "N" : ev.v] || VFORM.a;
+    const c = ev.c, cls = ev.cls;
+    let f2 = prev ? prev[1] : to[1];
+    if (ev.pal || PALC.includes(c)) f2 = 2200;
+    else if (LAB.includes(c)) f2 = 900;
+    else if (ALV.includes(c)) f2 = 1750;
+    else if (VEL.includes(c)) f2 = to[1] > 1500 ? 2300 : 1100;
+    const f1 = (cls === "V" && prev) ? prev[0] : (cls === "V" ? to[0] : 300);
+    const f3 = c === "r" ? 1700 : (prev && cls === "V" ? prev[2] : to[2]);
+    const cd = ev.type === "N" ? 0 : Math.min(CDUR[cls] || 0, ev.dur * .5);
+    const start = ev.t + cd * 0.5;
+    const g = Math.max(0.004, Math.min(GLIDE[cls] || .02, ev.dur - cd * 0.5 - 0.003));
+    moves.push({t: T + start, from:[f1, f2, f3], to, glide: g});
+    prev = to;
+  }
+  return {init: moves.length ? moves[0].from : VFORM.a, moves};
+}
+function makeFormantBank(ctx, sched) { // 3 parallel band-pass VCF
+  const input = ctx.createGain(), output = ctx.createGain();
+  const Q = [6, 11, 15], G = [1, .6, .32];
+  const fs = [0, 1, 2].map(k => {
+    const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.Q.value = Q[k]; f.frequency.value = sched.init[k];
+    const g = ctx.createGain(); g.gain.value = G[k] * Q[k] * 0.4;
+    input.connect(f); f.connect(g); g.connect(output); return f;
+  });
+  for (const m of sched.moves) for (let k = 0; k < 3; k++) glide(fs[k].frequency, m.from[k], m.to[k], m.t, m.glide);
+  return {input, output};
+}
+const lipRadiation = ctx => ctx.createIIRFilter([1, -0.97], [1]); // +6 dB/oct differentiator
+
+function buildVoice(ctx, entry, plan, T) {
+  const v = entry.vec;
+  const osc = ctx.createOscillator(); osc.setPeriodicWave(glottalWave(ctx));
+  const src = ctx.createGain(); src.gain.value = 0; osc.connect(src);
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf(ctx); noise.loop = true;
+  const nf = ctx.createBiquadFilter(); nf.type = "bandpass"; nf.frequency.value = 3000; nf.Q.value = 1.5;
+  const nAmp = ctx.createGain(); nAmp.gain.value = 0; noise.connect(nf); nf.connect(nAmp);
+  const asp = ctx.createGain(); asp.gain.value = 0; noise.connect(asp);
+  const sched = formantSchedule(plan, T);
+  const bank = makeFormantBank(ctx, sched);
+  src.connect(bank.input); asp.connect(bank.input);
+  const lip = lipRadiation(ctx); bank.output.connect(lip);
+  const out = ctx.createGain(); out.gain.value = 1;
+  const lipGain = ctx.createGain(); lipGain.gain.value = 10; lip.connect(lipGain); lipGain.connect(out);
+  nAmp.connect(out);
+  // f0 contour
+  const f0 = 105 + (1 - v.Weight) * 110;
+  const PF = {a:1, i:1.08, u:1.03, e:1, o:.95, N:.92};
+  osc.frequency.value = f0;
+  const evs = plan.events;
+  evs.forEach((ev, i) => {
+    const ts = T + ev.t, te = ts + ev.dur;
+    if (ev.type === "Q") {
+      src.gain.setTargetAtTime(0, ts, .003); nAmp.gain.setTargetAtTime(0, ts, .003); asp.gain.setTargetAtTime(0, ts, .003);
+      return;
+    }
+    let f = f0 * (PF[ev.v] || 1) * (1 + v.Contour * 0.12 * (ev.t / plan.dur)) * (ev.first ? 1 + 0.1 * v.Accent : 1);
+    if ("BZ".includes(ev.cls)) { osc.frequency.setTargetAtTime(f * .92, ts, .008); osc.frequency.setTargetAtTime(f, ts + .03, .02); }
+    else osc.frequency.setTargetAtTime(f, ts, .015);
+    if (ev.brake) { // 句末ピッチブレーキ: initial slope = delta_f0_slope_hz
+      const tc = Math.max(.05, ev.dur * 1.5);
+      const target = Math.max(45, f + DMP.delta_f0_slope_hz * tc);
+      osc.frequency.setTargetAtTime(target, ts + .03, tc);
+    }
+    const g = ev.gain * 0.9, ons = ev.charge ? .0015 : .006;
+    const cd = ev.type === "N" ? 0 : Math.min(CDUR[ev.cls] || 0, ev.dur * .5);
+    const nfp = NOISE_F[ev.c];
+    if (nfp) { nf.frequency.setValueAtTime(nfp[0], ts); nf.Q.setValueAtTime(nfp[1], ts); }
+    const burst = (t, a) => { nAmp.gain.setTargetAtTime(a, t, .0008); nAmp.gain.setTargetAtTime(0, t + .009, .004); };
+    const fric = (node, t, d, a) => { node.gain.setTargetAtTime(a, t, .006); node.gain.setTargetAtTime(0, t + d, .006); };
+    if (ev.type === "N") src.gain.setTargetAtTime(.55 * g, ts, .01);
+    else switch (ev.cls) {
+      case "V": src.gain.setTargetAtTime(g, ts, ons); break;
+      case "G": src.gain.setTargetAtTime(.5 * g, ts, .008); src.gain.setTargetAtTime(g, ts + cd, .01); break;
+      case "L": src.gain.setTargetAtTime(.45 * g, ts, .003); src.gain.setTargetAtTime(g, ts + cd, .004); break;
+      case "M": src.gain.setTargetAtTime(.4 * g, ts, .006); src.gain.setTargetAtTime(g, ts + cd, .006); break;
+      case "B": src.gain.setTargetAtTime(.1 * g, ts, .003); burst(ts + cd * .6, .5 * g); src.gain.setTargetAtTime(g, ts + cd, ons); break;
+      case "P": src.gain.setTargetAtTime(0, ts, .002); burst(ts + cd * .4, .9 * g); fric(asp, ts + cd * .4 + .008, cd * .6, .5 * g); src.gain.setTargetAtTime(g, ts + cd, ons); break;
+      case "A": src.gain.setTargetAtTime(0, ts, .002); fric(nAmp, ts, cd, .6 * g); src.gain.setTargetAtTime(g, ts + cd, ons); break;
+      case "F":
+        src.gain.setTargetAtTime(0, ts, .003);
+        if (ev.c === "h" || ev.c === "f") fric(asp, ts, cd, .4 * g); else fric(nAmp, ts, cd, .55 * g);
+        src.gain.setTargetAtTime(g, ts + cd, ons); break;
+      case "Z": src.gain.setTargetAtTime(.3 * g, ts, .004); fric(nAmp, ts, cd, .45 * g); src.gain.setTargetAtTime(g, ts + cd, ons); break;
+    }
+    const next = evs[i + 1];
+    const joins = next && next.type !== "Q" && !"PAF".includes(next.cls);
+    if (!joins) src.gain.setTargetAtTime(0, te - .018, ev.type === "N" || !next ? .035 : .01);
+  });
+  osc.start(T); noise.start(T);
+  const end = T + plan.dur + 0.4; osc.stop(end); noise.stop(end);
+  return {out, glottal: src, sched, end};
+}
+function buildFx(ctx, entry, plan, T, input, stopAt) {
+  const v = entry.vec;
+  const shaper = ctx.createWaveShaper(); shaper.curve = tanhCurve(1 + 7 * v.Hardness * (0.4 + 0.6 * v.Accent)); shaper.oversample = "2x";
+  input.connect(shaper);
+  const sum1 = ctx.createGain(); shaper.connect(sum1);
+  if (entry.voicedRatio > 0) { // RingMod 濁音唸り
+    const rg = ctx.createGain(); rg.gain.value = 0;
+    const ro = ctx.createOscillator(); ro.frequency.value = 28 + 60 * v.Weight; ro.connect(rg.gain);
+    const rw = ctx.createGain(); rw.gain.value = 0.9 * entry.voicedRatio;
+    shaper.connect(rg); rg.connect(rw); rw.connect(sum1); ro.start(T); ro.stop(stopAt);
+  }
+  const sum2 = ctx.createGain(); sum1.connect(sum2);
+  if (v.ReyNorm > 0.25) { // Comb / phaser: airflow
+    const base = 1 / clamp(v.Freq_Hz, 80, 330);
+    const dl = ctx.createDelay(0.05); dl.delayTime.value = base;
+    const fb = ctx.createGain(); fb.gain.value = 0.2 + 0.45 * v.ReyNorm;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.25 + 0.8 * v.ReyNorm;
+    const ld = ctx.createGain(); ld.gain.value = base * 0.35; lfo.connect(ld); ld.connect(dl.delayTime);
+    const wet = ctx.createGain(); wet.gain.value = 0.55 * v.ReyNorm;
+    sum1.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(sum2);
+    lfo.start(T); lfo.stop(stopAt);
+  }
+  const out = ctx.createGain(); sum2.connect(out);
+  if (entry.redup && plan.unitLen > 0) { // BBD delay at the repetition interval (畳語連打)
+    const dl = ctx.createDelay(1); dl.delayTime.value = clamp(plan.unitLen, 0.04, 0.9);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
+    const fb = ctx.createGain(); fb.gain.value = 0.25 + 0.2 * v.Regularity;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.6;
+    const ld = ctx.createGain(); ld.gain.value = 0.0015; lfo.connect(ld); ld.connect(dl.delayTime);
+    const wet = ctx.createGain(); wet.gain.value = 0.3 * v.Regularity;
+    sum2.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(wet); wet.connect(out);
+    lfo.start(T); lfo.stop(stopAt);
+  }
+  return out;
+}
+function subKick(ctx, T, amount, dest) {
+  const [lo, hi] = DMP.accent_sub_kick;
+  const o = ctx.createOscillator(); o.type = "sine";
+  o.frequency.setValueAtTime(hi, T); o.frequency.exponentialRampToValueAtTime(lo, T + .14);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(amount, T + .004); g.gain.setTargetAtTime(0, T + .02, .09);
+  o.connect(g); g.connect(dest); o.start(T); o.stop(T + .7);
+}
+function buildPhys(ctx, entry, plan, T, opts) {
+  const data = renderPhys(entry, plan, opts, ctx.sampleRate);
+  const ab = ctx.createBuffer(1, data.length, ctx.sampleRate); ab.copyToChannel(data, 0);
+  const src = ctx.createBufferSource(); src.buffer = ab;
+  const raw = ctx.createGain(); src.connect(raw);
+  const stopAt = T + ab.duration + 2.5;
+  const out = buildFx(ctx, entry, plan, T, raw, stopAt);
+  src.start(T);
+  return {raw, out, end: T + ab.duration + (entry.redup ? 1.5 : .3)};
+}
+// mode: "voice" | "phys" | "cross"
+function scheduleWord(ctx, dest, entry, plan, T, mode, opts, phraseStart) {
+  const V = mode === "voice" ? 1 : mode === "phys" ? 0 : opts.vocalness;
+  let end = T + plan.dur;
+  const mix = (node, g) => { const m = ctx.createGain(); m.gain.value = g; node.connect(m); m.connect(dest); };
+  let voice = null, phys = null;
+  if (V > 0) { voice = buildVoice(ctx, entry, plan, T); mix(voice.out, V); end = Math.max(end, voice.end); }
+  if (V < 1) {
+    phys = buildPhys(ctx, entry, plan, T, opts); mix(phys.out, (1 - V) * 0.55); end = Math.max(end, phys.end);
+    if (opts.subKick && entry.vec.Accent > 0.35) subKick(ctx, T, (1 - V * 0.5) * entry.vec.Accent * (phraseStart ? 0.9 : 0.55), dest);
+  }
+  if (voice && phys) { // Cross-excitation: 2·V(1−V)·[impact→formant + voice→modal]·0.5
+    const gx = 2 * V * (1 - V) * 0.5;
+    const bankA = makeFormantBank(ctx, voice.sched);
+    phys.raw.connect(bankA.input);
+    const lipA = lipRadiation(ctx); bankA.output.connect(lipA);
+    mix(lipA, gx * 3.2);
+    const mat = MAT[entry.material], f1 = clamp(entry.vec.Freq_Hz * mat.fk, 45, 2400);
+    const modal = ctx.createGain();
+    mat.r.slice(0, 5).forEach((r, k) => {
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = Math.min(f1 * r, ctx.sampleRate * .45);
+      bp.Q.value = entry.material === "metal" ? 60 : 28;
+      const g = ctx.createGain(); g.gain.value = bp.Q.value * 0.22 * Math.pow(k + 1, -.6);
+      voice.glottal.connect(bp); bp.connect(g); g.connect(modal);
+    });
+    mix(modal, gx * 1.4);
+  }
+  return end;
+}
+
+/* =====================================================================
+   7. Audio context, master bus, scope
+   ===================================================================== */
+let AC = null;
+const active = new Set();
+function audio() {
+  if (!AC) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ctx.createGain();
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = .003; comp.release.value = .15;
+    const outG = ctx.createGain();
+    const conv = ctx.createConvolver();
+    const len = Math.floor(ctx.sampleRate * 1.8), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+    conv.buffer = ir;
+    const wet = ctx.createGain();
+    const an = ctx.createAnalyser(); an.fftSize = 2048;
+    master.connect(comp); comp.connect(outG); comp.connect(conv); conv.connect(wet); wet.connect(outG);
+    outG.connect(an); an.connect(ctx.destination);
+    AC = {ctx, master, wet, outG, an};
+    applyMix();
+    drawScope();
+  }
+  if (AC.ctx.state === "suspended") AC.ctx.resume();
+  return AC;
+}
+function applyMix() { if (!AC) return; AC.wet.gain.value = opts.room * 0.9; AC.outG.gain.value = opts.volume; }
+
+/* =====================================================================
+   8. App state + UI
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const opts = {vocalness:.5, stiffness:.6, tempo:1, room:.22, volume:.8, subKick:true};
+let poem = [], sel = [0, 0];
+const ENG = [
+  {mode:"tts", ic:"🔊", name:"TTS 読み上げ"},
+  {mode:"voice", ic:"🗣", name:"Engine A 声"},
+  {mode:"phys", ic:"💥", name:"Engine B 物理"},
+  {mode:"cross", ic:"🎬", name:"Cross-Foley"}
+];
+const EXAMPLES = ["激しい雨が降り、雷が轟いて地面が揺れた", "ポツポツ ザーザー ドカン", "静かな夜に雪が降り、心がドキドキした", "扉が開き、ガラスが割れて火が燃えた", "タッタッ ピカッ ゴロゴロ\nシーン"];
+
+function engButtons(scope, l, w, small) {
+  return ENG.map(e => `<button class="eb${small ? " sm" : ""}" data-mode="${e.mode}" data-scope="${scope}" data-l="${l}" data-w="${w}" aria-label="${e.name}" title="${e.name}"><span aria-hidden="true">${e.ic}</span>${small ? "" : " " + e.name}</button>`).join("");
+}
+function vecBars(v) {
+  const n = vecNorm(v);
+  const groups = ["g1","g1","g1","g1","g2","g2","g2","g2","g3","g3","g3","g3","g4","g4","g4","g4"];
+  return n.map((x, i) => i === 11
+    ? `<span style="height:100%;background:${v.Color_Hex}"></span>`
+    : `<span class="${groups[i]}" style="height:${Math.round(8 + x * 92)}%"></span>`).join("");
+}
+function vecNorm(v) {
+  return [v.Weight, v.Time, v.Space, v.Flow, v.Hardness, v.Moisture,
+    clamp(Math.log(v.Freq_Hz / 60) / Math.log(4000 / 60)), clamp(v.Decay / 1.6), v.ReyNorm, v.Boyle, (v.Temp_Code + 3) / 6, 1,
+    v.Accent, (v.Contour + 1) / 2, clamp(v.Meter / 4), v.Regularity];
+}
+function convert() {
+  const res = textToPoem($("src").value);
+  poem = res.lines.map(ws => ws.map(makeEntry));
+  sel = [0, 0];
+  $("status").innerHTML = res.mode === "keep" ? "<b>オノマトペ文</b>として認識 · そのまま使用"
+    : res.mode === "convert" ? `短文から<b>${poem.flat().length}語</b>の詩に変換` : "テキストを入力してください";
+  render();
+}
+function render() {
+  $("poemBtns").innerHTML = poem.length ? engButtons("poem", 0, 0, false) + `<button class="eb stop" id="stopBtn">■ 停止</button>` : "";
+  $("poemText").textContent = poem.map(l => l.map(e => e.text).join(" ")).join(" ／ ");
+  $("lines").innerHTML = poem.map((line, l) => `
+    <div class="line">
+      <div class="line-ctrl"><span class="ln">LINE ${l + 1}</span><div class="wbtns">${engButtons("line", l, 0, true)}</div></div>
+      <div class="words">${line.map((e, w) => `
+        <article class="word${sel[0] === l && sel[1] === w ? " sel" : ""}" tabindex="0" data-l="${l}" data-w="${w}" id="w-${l}-${w}" aria-label="${e.text}">
+          <div class="wtxt" style="--wc:${e.vec.Color_Hex}"><i></i>${esc(e.text)}</div>
+          <div class="wmeta"><span>${MAT[e.material].name}</span><span>${e.vec.Freq_Hz} Hz</span><span>${e.redup ? "畳語×" + e.redup.count : e.moras.length + "拍"}</span></div>
+          <div class="vec16" aria-hidden="true">${vecBars(e.vec)}</div>
+          <div class="wbtns">${engButtons("word", l, w, true)}</div>
+        </article>`).join("")}</div>
+    </div>`).join("");
+  renderInspector();
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function moraLabel(e) {
+  return e.moras.map(m => m.type === "Q" ? "Q(18ms)" : m.type === "N" ? "N" : m.type === "R" ? "ː" : (m.c || "∅") + (m.pal ? "ʲ" : "") + m.v).join(" · ");
+}
+function renderInspector() {
+  const e = poem[sel[0]] && poem[sel[0]][sel[1]];
+  if (!e) { $("insp").innerHTML = `<p class="note">詩に変換すると、ここに選んだ語の16軸ベクトルが出ます。</p>`; return; }
+  const v = e.vec, n = vecNorm(v);
+  const temp = v.Temp_Code > 0 ? `T+${v.Temp_Code} 温` : v.Temp_Code < 0 ? `T${v.Temp_Code} 冷` : "T±0";
+  const reStr = v.Reynolds.toExponential(1).replace("e+", "×10^");
+  const G = [
+    {name:"Laban Effort", cls:"g1", ax:[["Weight", "軽 ↔ 強", v.Weight.toFixed(2)], ["Time", "持続 ↔ 突発", v.Time.toFixed(2)], ["Space", "直接 ↔ 間接", v.Space.toFixed(2)], ["Flow", "束縛 ↔ 自由", v.Flow.toFixed(2)]]},
+    {name:"Acoustic Physics", cls:"g2", ax:[["Hardness", "", v.Hardness.toFixed(2)], ["Moisture", "", v.Moisture.toFixed(2)], ["Freq_Hz", "", v.Freq_Hz + " Hz"], ["Decay", "", v.Decay.toFixed(2) + " s"]]},
+    {name:"Extended Dynamics", cls:"g3", ax:[["Reynolds", "層流 ↔ 乱流", "Re " + reStr], ["Boyle", "圧縮 ↔ 膨張", v.Boyle.toFixed(2)], ["Temp_Code", "冷 ↔ 熱", temp], ["Color_Hex", "", `<span class="sw" style="background:${v.Color_Hex}"></span>${v.Color_Hex}`]]},
+    {name:"Phrasing", cls:"g4", ax:[["Accent", "", v.Accent.toFixed(2)], ["Contour", "下降 ↔ 上昇", (v.Contour >= 0 ? "+" : "") + v.Contour.toFixed(2)], ["Meter", "", v.Meter + " 拍"], ["Regularity", "", v.Regularity.toFixed(2)]]}
+  ];
+  const plan = planWord(e, opts, true);
+  const tc = lerp(3.0, 0.5, clamp(opts.stiffness * 0.75 + v.Hardness * 0.25));
+  let k = 0;
+  $("insp").innerHTML = `
+    <div class="insp-head"><span class="insp-word">${esc(e.text)}</span><span class="insp-sub">${MAT[e.material].name} · t<sub>c</sub> ${tc.toFixed(2)} ms · ${(plan.dur * 1000).toFixed(0)} ms</span></div>
+    <div class="mora">${moraLabel(e)}</div>
+    ${G.map(g => `<div class="grp"><h3><i class="${g.cls}"></i>${g.name}</h3>${g.ax.map(a => { const x = n[k++]; return `
+      <div class="ax" title="${a[1]}"><span class="nm">${a[0]}</span><span class="bar"><span class="${g.cls}" style="width:${Math.round(x * 100)}%;${a[0] === "Color_Hex" ? "background:" + v.Color_Hex : ""}"></span></span><span class="val">${a[2]}</span></div>`; }).join("")}</div>`).join("")}
+    <p class="note">${e.redup ? `畳語 ${e.redup.count}回: スイング ${Math.round(DMP.swing_ratio * 100)}:${Math.round(100 - DMP.swing_ratio * 100)}、2音目 ×${DMP.second_decay_ratio}、BBD ${(plan.unitLen * 1000).toFixed(0)} ms。` : "畳語ではないのでスイングなし。"}
+    ${e.moras.some(m => m.type === "Q") ? `促音: ${DMP.sokuon_charge_ms} ms チャージ後に x<sup>1.5</sup> ブースト。` : ""}
+    句末では f0 が ${DMP.delta_f0_slope_hz} Hz/s で下降。</p>`;
+}
+function renderDMP() {
+  $("dmp").innerHTML = [["swing", `${Math.round(DMP.swing_ratio * 100)}:${Math.round(100 - DMP.swing_ratio * 100)}`], ["2nd", "×" + DMP.second_decay_ratio],
+    ["sokuon", DMP.sokuon_charge_ms + " ms · F∝x^1.5"], ["Δf0", DMP.delta_f0_slope_hz + " Hz/s"], ["sub-kick", DMP.accent_sub_kick.join("–") + " Hz"]]
+    .map(([a, b]) => `<span>${a} <b>${b}</b></span>`).join("");
+}
+function select(l, w) {
+  sel = [l, w];
+  document.querySelectorAll(".word.sel").forEach(x => x.classList.remove("sel"));
+  const el = $(`w-${l}-${w}`); if (el) el.classList.add("sel");
+  renderInspector();
+}
+function itemsFor(scope, l, w) {
+  if (scope === "word") return [{l, w, phraseEnd:true, phraseStart:true}];
+  const lines = scope === "line" ? [l] : poem.map((_, i) => i);
+  const items = [];
+  for (const li of lines) poem[li].forEach((_, wi) => items.push({l: li, w: wi, phraseStart: wi === 0, phraseEnd: wi === poem[li].length - 1, lineEnd: wi === poem[li].length - 1}));
+  return items;
+}
+function speak(text) {
+  if (!("speechSynthesis" in window)) { toast("このブラウザでは音声読み上げ（Web Speech API）が使えません"); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP"; u.rate = opts.tempo;
+  const jv = speechSynthesis.getVoices().find(x => /^ja/i.test(x.lang)); if (jv) u.voice = jv;
+  u.onstart = () => setRec(true, "TTS"); u.onend = () => setRec(false);
+  u.onerror = () => { setRec(false); toast("読み上げを開始できませんでした。日本語音声がない可能性があります"); };
+  speechSynthesis.speak(u);
+}
+let recTimer = null;
+function setRec(on, label) { $("rec").classList.toggle("on", on); $("recTxt").textContent = on ? "REC · " + label : "STANDBY"; }
+function perform(mode, scope, l, w) {
+  if (scope === "word") select(l, w);
+  const items = itemsFor(scope, l, w);
+  if (mode === "tts") {
+    const txt = scope === "word" ? poem[l][w].text : (scope === "line" ? [l] : poem.map((_, i) => i)).map(i => poem[i].map(e => e.text).join(" ")).join("、");
+    speak(txt); return;
+  }
+  const {ctx, master} = audio();
+  const bus = ctx.createGain(); bus.connect(master); active.add(bus);
+  let t = ctx.currentTime + 0.06, end = t;
+  const label = {voice:"ENGINE A", phys:"ENGINE B", cross:"CROSS-FOLEY V=" + opts.vocalness.toFixed(2)}[mode];
+  setRec(true, label);
+  for (const it of items) {
+    const entry = poem[it.l][it.w];
+    const plan = planWord(entry, opts, it.phraseEnd);
+    end = Math.max(end, scheduleWord(ctx, bus, entry, plan, t, mode, opts, it.phraseStart));
+    const delay = (t - ctx.currentTime) * 1000, id = `w-${it.l}-${it.w}`;
+    setTimeout(() => { const el = $(id); if (el) { el.classList.add("live"); setTimeout(() => el.classList.remove("live"), Math.max(160, plan.dur * 1000)); } }, delay);
+    t += plan.dur + (0.06 + (1 - entry.vec.Time) * 0.08) / opts.tempo + (it.lineEnd ? 0.32 / opts.tempo : 0);
+  }
+  clearTimeout(recTimer);
+  recTimer = setTimeout(() => setRec(false), (t - ctx.currentTime) * 1000 + 200);
+  setTimeout(() => { try { bus.disconnect(); } catch (e) {} active.delete(bus); }, (end - ctx.currentTime + 3) * 1000);
+}
+function stopAll() {
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  if (AC) for (const b of active) b.gain.setTargetAtTime(0, AC.ctx.currentTime, 0.03);
+  setRec(false);
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3200); }
+
+function drawScope() {
+  const cv = $("scope"), g = cv.getContext("2d"), buf = new Float32Array(2048);
+  const cs = getComputedStyle(document.documentElement);
+  const frame = () => {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    g.strokeStyle = cs.getPropertyValue("--line").trim(); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+    if (AC) {
+      AC.an.getFloatTimeDomainData(buf);
+      g.strokeStyle = cs.getPropertyValue("--cross").trim(); g.lineWidth = 1.5; g.beginPath();
+      for (let i = 0; i < buf.length; i++) { const x = i / (buf.length - 1) * w, y = h / 2 - buf[i] * h * 0.46; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.stroke();
+    }
+    requestAnimationFrame(frame);
+  };
+  frame();
+}
+
+// wiring
+[["vocal","vocalness",v => v.toFixed(2)],["stiff","stiffness",v => lerp(3, .5, v).toFixed(2) + " ms"],["tempo","tempo",v => "×" + v.toFixed(2)],["room","room",v => Math.round(v * 100) + "%"],["vol","volume",v => Math.round(v * 100) + "%"]]
+  .forEach(([id, key, fmt]) => {
+    const el = $(id), o = $(id + "O");
+    const upd = () => { opts[key] = +el.value; o.textContent = fmt(opts[key]); applyMix(); if (key === "stiffness" || key === "tempo") renderInspector(); };
+    el.addEventListener("input", upd); upd();
+  });
+$("subk").addEventListener("change", e => opts.subKick = e.target.checked);
+$("convert").addEventListener("click", convert);
+$("src").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) convert(); });
+$("examples").innerHTML = EXAMPLES.map((x, i) => `<button class="chipbtn" data-ex="${i}">${esc(x.replace("\n", " / "))}</button>`).join("");
+$("examples").addEventListener("click", e => { const b = e.target.closest("[data-ex]"); if (!b) return; $("src").value = EXAMPLES[+b.dataset.ex]; convert(); });
+document.addEventListener("click", e => {
+  if (e.target.closest("#stopBtn")) { stopAll(); return; }
+  const b = e.target.closest("[data-mode]");
+  if (b) { perform(b.dataset.mode, b.dataset.scope, +b.dataset.l, +b.dataset.w); return; }
+  const card = e.target.closest(".word");
+  if (card) select(+card.dataset.l, +card.dataset.w);
+});
+document.addEventListener("keydown", e => {
+  const card = e.target.closest && e.target.closest(".word");
+  if (card && e.target === card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(+card.dataset.l, +card.dataset.w); perform("cross", "word", +card.dataset.l, +card.dataset.w); }
+});
+$("copyJson").addEventListener("click", () => {
+  const json = JSON.stringify({dmp: DMP, poem: poem.map(l => l.map(e => ({text: e.text, material: e.material, redup: e.redup, vec: e.vec})))}, null, 1);
+  const fb = () => { const ta = $("copyFallback"); ta.hidden = false; ta.value = json; ta.select(); $("copyMsg").textContent = "選択済み · Ctrl+C でコピー"; };
+  try { navigator.clipboard.writeText(json).then(() => $("copyMsg").textContent = "コピーしました", fb); } catch (err) { fb(); }
+});
+if ("speechSynthesis" in window) speechSynthesis.getVoices();
+renderDMP();
+convert();
+</script>
+
+</html>
